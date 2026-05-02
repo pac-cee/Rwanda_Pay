@@ -23,13 +23,26 @@ const queryClient = new QueryClient();
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" />
       <Stack.Screen
         name="add-card"
-        options={{
-          headerShown: false,
-          presentation: "modal",
-        }}
+        options={{ presentation: "modal", headerShown: false }}
+      />
+      <Stack.Screen
+        name="send"
+        options={{ presentation: "modal", headerShown: false }}
+      />
+      <Stack.Screen
+        name="receive"
+        options={{ presentation: "modal", headerShown: false }}
+      />
+      <Stack.Screen
+        name="transactions-full"
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="analytics-full"
+        options={{ headerShown: false }}
       />
     </Stack>
   );

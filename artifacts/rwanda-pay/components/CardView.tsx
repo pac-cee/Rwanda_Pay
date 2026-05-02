@@ -12,6 +12,7 @@ interface CardViewProps {
   card: Card;
   isSelected?: boolean;
   compact?: boolean;
+  hideBalance?: boolean;
 }
 
 function formatBalance(amount: number): string {
@@ -30,12 +31,7 @@ function CardTypeIcon({ type }: { type: Card["type"] }) {
     return (
       <View style={styles.mcContainer}>
         <View style={[styles.mcCircle, { backgroundColor: "#EB001B" }]} />
-        <View
-          style={[
-            styles.mcCircle,
-            { backgroundColor: "#F79E1B", marginLeft: -10 },
-          ]}
-        />
+        <View style={[styles.mcCircle, { backgroundColor: "#F79E1B", marginLeft: -10 }]} />
       </View>
     );
   }
@@ -50,6 +46,7 @@ export default function CardView({
   card,
   isSelected = false,
   compact = false,
+  hideBalance = false,
 }: CardViewProps) {
   const scale = useSharedValue(isSelected ? 1 : 0.97);
 
@@ -71,24 +68,12 @@ export default function CardView({
       ]}
     >
       {/* Decorative circles */}
-      <View
-        style={[
-          styles.circle1,
-          { backgroundColor: "rgba(255,255,255,0.08)" },
-        ]}
-      />
-      <View
-        style={[
-          styles.circle2,
-          { backgroundColor: "rgba(255,255,255,0.05)" },
-        ]}
-      />
+      <View style={[styles.circle1, { backgroundColor: "rgba(255,255,255,0.08)" }]} />
+      <View style={[styles.circle2, { backgroundColor: "rgba(255,255,255,0.05)" }]} />
 
-      {/* Top row: bank + type */}
+      {/* Top row */}
       <View style={styles.topRow}>
-        <View>
-          <Text style={styles.bankName}>{card.bank}</Text>
-        </View>
+        <Text style={styles.bankName}>{card.bank}</Text>
         <CardTypeIcon type={card.type} />
       </View>
 
@@ -115,7 +100,9 @@ export default function CardView({
         {!compact && (
           <View style={styles.balanceBlock}>
             <Text style={styles.label}>BALANCE</Text>
-            <Text style={styles.balance}>{formatBalance(card.balance)}</Text>
+            <Text style={styles.balance}>
+              {hideBalance ? "••••••" : formatBalance(card.balance)}
+            </Text>
           </View>
         )}
       </View>
@@ -131,11 +118,13 @@ const styles = StyleSheet.create({
     padding: 24,
     overflow: "hidden",
     justifyContent: "space-between",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 6,
   },
-  compact: {
-    height: 160,
-    padding: 18,
-  },
+  compact: { height: 160, padding: 18 },
   circle1: {
     position: "absolute",
     width: 200,
@@ -152,84 +141,20 @@ const styles = StyleSheet.create({
     bottom: -50,
     left: -30,
   },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  bankName: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    letterSpacing: 0.3,
-  },
-  brandBadge: {
-    backgroundColor: "rgba(255,255,255,0.15)",
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  visaText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
-    letterSpacing: 1,
-  },
-  momoText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-  },
-  mcContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  mcCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    opacity: 0.9,
-  },
-  nfcRow: {
-    alignSelf: "flex-start",
-  },
-  cardNumber: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 17,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 2,
-  },
-  bottomRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-end",
-  },
-  label: {
-    color: "rgba(255,255,255,0.55)",
-    fontSize: 9,
-    fontFamily: "Inter_500Medium",
-    letterSpacing: 1.2,
-    marginBottom: 2,
-  },
-  holderName: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
-  },
-  rightBottom: {
-    alignItems: "center",
-  },
-  expiry: {
-    color: "#FFFFFF",
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
-  balanceBlock: {
-    alignItems: "flex-end",
-  },
-  balance: {
-    color: "#FFD600",
-    fontSize: 12,
-    fontFamily: "Inter_700Bold",
-  },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  bankName: { color: "rgba(255,255,255,0.9)", fontSize: 15, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
+  brandBadge: { backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
+  visaText: { color: "#FFFFFF", fontSize: 14, fontFamily: "Inter_700Bold", letterSpacing: 1 },
+  momoText: { color: "#FFFFFF", fontSize: 12, fontFamily: "Inter_700Bold" },
+  mcContainer: { flexDirection: "row", alignItems: "center" },
+  mcCircle: { width: 22, height: 22, borderRadius: 11, opacity: 0.9 },
+  nfcRow: { alignSelf: "flex-start" },
+  cardNumber: { color: "rgba(255,255,255,0.9)", fontSize: 17, fontFamily: "Inter_500Medium", letterSpacing: 2 },
+  bottomRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+  label: { color: "rgba(255,255,255,0.55)", fontSize: 9, fontFamily: "Inter_500Medium", letterSpacing: 1.2, marginBottom: 2 },
+  holderName: { color: "#FFFFFF", fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  rightBottom: { alignItems: "center" },
+  expiry: { color: "#FFFFFF", fontSize: 13, fontFamily: "Inter_500Medium" },
+  balanceBlock: { alignItems: "flex-end" },
+  balance: { color: "#FFD600", fontSize: 12, fontFamily: "Inter_700Bold" },
 });

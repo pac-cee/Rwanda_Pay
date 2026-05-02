@@ -40,6 +40,13 @@ export interface Transaction {
   cardId: string;
 }
 
+export interface Profile {
+  name: string;
+  phone: string;
+  email: string;
+  initials: string;
+}
+
 const MOCK_CARDS: Card[] = [
   {
     id: "card-1",
@@ -196,6 +203,13 @@ const MOCK_TRANSACTIONS: Transaction[] = [
   },
 ];
 
+const DEFAULT_PROFILE: Profile = {
+  name: "Alex Mugisha",
+  phone: "+250 788 555 999",
+  email: "alex.mugisha@email.com",
+  initials: "AM",
+};
+
 interface WalletContextType {
   cards: Card[];
   transactions: Transaction[];
@@ -206,102 +220,108 @@ interface WalletContextType {
   addTransaction: (tx: Omit<Transaction, "id">) => void;
   selectedCard: Card | undefined;
   totalBalance: number;
+  hideBalance: boolean;
+  toggleHideBalance: () => void;
+  notificationCount: number;
+  clearNotifications: () => void;
+  profile: Profile;
+  updateProfile: (p: Partial<Profile>) => void;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  CARDS: "@rwanda_pay_cards",
-  TRANSACTIONS: "@rwanda_pay_transactions",
-  SELECTED_CARD: "@rwanda_pay_selected_card",
+  CARDS: "@rp_cards",
+  TRANSACTIONS: "@rp_transactions",
+  SELECTED_CARD: "@rp_selected_card",
+  HIDE_BALANCE: "@rp_hide_balance",
+  PROFILE: "@rp_profile",
+  NOTIFICATIONS: "@rp_notifications",
 };
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [cards, setCards] = useState<Card[]>(MOCK_CARDS);
-  const [transactions, setTransactions] =
-    useState<Transaction[]>(MOCK_TRANSACTIONS);
-  const [selectedCardId, setSelectedCardIdState] = useState<string>(
-    MOCK_CARDS[0].id
-  );
+  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [selectedCardId, setSelectedCardIdState] = useState<string>(MOCK_CARDS[0].id);
+  const [hideBalance, setHideBalance] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(3);
+  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
 
   useEffect(() => {
     (async () => {
       try {
-        const [storedCards, storedTx, storedCard] = await Promise.all([
+        const [sc, hb, prof, notifs, storedCards, storedTx] = await Promise.all([
+          AsyncStorage.getItem(STORAGE_KEYS.SELECTED_CARD),
+          AsyncStorage.getItem(STORAGE_KEYS.HIDE_BALANCE),
+          AsyncStorage.getItem(STORAGE_KEYS.PROFILE),
+          AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS),
           AsyncStorage.getItem(STORAGE_KEYS.CARDS),
           AsyncStorage.getItem(STORAGE_KEYS.TRANSACTIONS),
-          AsyncStorage.getItem(STORAGE_KEYS.SELECTED_CARD),
         ]);
+        if (sc) setSelectedCardIdState(sc);
+        if (hb) setHideBalance(JSON.parse(hb));
+        if (prof) setProfile(JSON.parse(prof));
+        if (notifs) setNotificationCount(JSON.parse(notifs));
         if (storedCards) setCards(JSON.parse(storedCards));
         if (storedTx) setTransactions(JSON.parse(storedTx));
-        if (storedCard) setSelectedCardIdState(storedCard);
       } catch {}
     })();
   }, []);
 
-  const persist = useCallback(
-    async (c: Card[], t: Transaction[], s: string) => {
-      try {
-        await Promise.all([
-          AsyncStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(c)),
-          AsyncStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(t)),
-          AsyncStorage.setItem(STORAGE_KEYS.SELECTED_CARD, s),
-        ]);
-      } catch {}
-    },
-    []
-  );
+  const setSelectedCardId = useCallback((id: string) => {
+    setSelectedCardIdState(id);
+    AsyncStorage.setItem(STORAGE_KEYS.SELECTED_CARD, id).catch(() => {});
+  }, []);
 
-  const setSelectedCardId = useCallback(
-    (id: string) => {
-      setSelectedCardIdState(id);
-      persist(cards, transactions, id);
-    },
-    [cards, transactions, persist]
-  );
+  const toggleHideBalance = useCallback(() => {
+    setHideBalance((prev) => {
+      const next = !prev;
+      AsyncStorage.setItem(STORAGE_KEYS.HIDE_BALANCE, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
 
-  const addCard = useCallback(
-    (card: Omit<Card, "id">) => {
-      const newCard: Card = {
-        ...card,
-        id: `card-${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
-      };
-      const updated = [...cards, newCard];
-      setCards(updated);
-      persist(updated, transactions, selectedCardId);
-    },
-    [cards, transactions, selectedCardId, persist]
-  );
+  const clearNotifications = useCallback(() => {
+    setNotificationCount(0);
+    AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, "0").catch(() => {});
+  }, []);
 
-  const removeCard = useCallback(
-    (id: string) => {
-      const updated = cards.filter((c) => c.id !== id);
-      setCards(updated);
-      const newSelected =
-        selectedCardId === id
-          ? updated[0]?.id ?? ""
-          : selectedCardId;
-      setSelectedCardIdState(newSelected);
-      persist(updated, transactions, newSelected);
-    },
-    [cards, transactions, selectedCardId, persist]
-  );
+  const updateProfile = useCallback((p: Partial<Profile>) => {
+    setProfile((prev) => {
+      const next = { ...prev, ...p };
+      AsyncStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
 
-  const addTransaction = useCallback(
-    (tx: Omit<Transaction, "id">) => {
-      const newTx: Transaction = {
-        ...tx,
-        id: `tx-${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
-      };
-      const updated = [newTx, ...transactions];
-      setTransactions(updated);
-      persist(cards, updated, selectedCardId);
-    },
-    [cards, transactions, selectedCardId, persist]
-  );
+  const addCard = useCallback((card: Omit<Card, "id">) => {
+    const newCard: Card = { ...card, id: `card-${Date.now()}` };
+    setCards((prev) => {
+      const updated = [...prev, newCard];
+      AsyncStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const removeCard = useCallback((id: string) => {
+    setCards((prev) => {
+      const updated = prev.filter((c) => c.id !== id);
+      AsyncStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
+    const newTx: Transaction = { ...tx, id: `tx-${Date.now()}` };
+    setTransactions((prev) => {
+      const updated = [newTx, ...prev];
+      AsyncStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId);
-  const totalBalance = cards.reduce((sum, c) => sum + c.balance, 0);
+  const totalBalance = cards.reduce((s, c) => s + c.balance, 0);
 
   return (
     <WalletContext.Provider
@@ -315,6 +335,12 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         addTransaction,
         selectedCard,
         totalBalance,
+        hideBalance,
+        toggleHideBalance,
+        notificationCount,
+        clearNotifications,
+        profile,
+        updateProfile,
       }}
     >
       {children}

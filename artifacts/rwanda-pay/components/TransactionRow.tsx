@@ -42,11 +42,13 @@ function formatDate(dateStr: string): string {
 interface TransactionRowProps {
   transaction: Transaction;
   showBorder?: boolean;
+  hideAmount?: boolean;
 }
 
 export default function TransactionRow({
   transaction,
   showBorder = true,
+  hideAmount = false,
 }: TransactionRowProps) {
   const colors = useColors();
   const iconName = CATEGORY_ICONS[transaction.category] as any;
@@ -80,10 +82,12 @@ export default function TransactionRow({
         </View>
       </View>
       <View style={styles.amountWrap}>
-        <Text style={[styles.amount, { color: amountColor }]}>
-          {formatAmount(transaction.amount, transaction.type)}
+        <Text style={[styles.amount, { color: hideAmount ? colors.mutedForeground : amountColor }]}>
+          {hideAmount ? "••••••" : formatAmount(transaction.amount, transaction.type)}
         </Text>
-        <Text style={[styles.currency, { color: colors.mutedForeground }]}>RWF</Text>
+        {!hideAmount && (
+          <Text style={[styles.currency, { color: colors.mutedForeground }]}>RWF</Text>
+        )}
       </View>
     </View>
   );
@@ -97,49 +101,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     gap: 14,
   },
-  iconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  info: {
-    flex: 1,
-    gap: 4,
-  },
-  merchant: {
-    fontSize: 15,
-    fontFamily: "Inter_500Medium",
-  },
-  meta: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  date: {
-    fontSize: 12,
-    fontFamily: "Inter_400Regular",
-  },
-  pendingBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  pendingText: {
-    fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
-  },
-  amountWrap: {
-    alignItems: "flex-end",
-  },
-  amount: {
-    fontSize: 15,
-    fontFamily: "Inter_700Bold",
-  },
-  currency: {
-    fontSize: 10,
-    fontFamily: "Inter_400Regular",
-    marginTop: 1,
-  },
+  iconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  info: { flex: 1, gap: 4 },
+  merchant: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  meta: { flexDirection: "row", alignItems: "center", gap: 8 },
+  date: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  pendingBadge: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  pendingText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
+  amountWrap: { alignItems: "flex-end" },
+  amount: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  currency: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 1 },
 });
