@@ -51,6 +51,7 @@ function AppNavigator() {
         <Stack.Screen name="add-card" options={{ presentation: "modal" }} />
         <Stack.Screen name="send" options={{ presentation: "modal" }} />
         <Stack.Screen name="receive" options={{ presentation: "modal" }} />
+        <Stack.Screen name="topup" options={{ presentation: "modal" }} />
         <Stack.Screen name="transactions-full" />
         <Stack.Screen name="analytics-full" />
       </Stack>

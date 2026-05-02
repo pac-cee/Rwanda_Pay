@@ -6,17 +6,11 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { cardsApi, transactionsApi, type ApiCard, type ApiTransaction } from "@/lib/api";
 
 export type CardType = "visa" | "mastercard" | "momo";
-export type TransactionType = "payment" | "received" | "sent";
+export type TransactionType = "payment" | "received" | "sent" | "topup" | "send" | "receive";
 export type TransactionStatus = "success" | "pending" | "failed";
-export type TransactionCategory =
-  | "food"
-  | "transport"
-  | "shopping"
-  | "entertainment"
-  | "utilities"
-  | "transfer";
 
 export interface Card {
   id: string;
@@ -27,6 +21,7 @@ export interface Card {
   balance: number;
   type: CardType;
   color: string;
+  isDefault: boolean;
 }
 
 export interface Transaction {
@@ -36,8 +31,9 @@ export interface Transaction {
   date: string;
   status: TransactionStatus;
   type: TransactionType;
-  category: TransactionCategory;
-  cardId: string;
+  category: string;
+  cardId: string | null;
+  recipientName?: string | null;
 }
 
 export interface Profile {
@@ -47,168 +43,39 @@ export interface Profile {
   initials: string;
 }
 
+function apiCardToCard(c: ApiCard): Card {
+  return {
+    id: c.id,
+    bank: c.cardName,
+    holderName: c.holderName,
+    cardNumber: `${c.cardType.toUpperCase()} •••• •••• ${c.last4}`,
+    expiry: "••/••",
+    balance: 0,
+    type: c.cardType === "visa" ? "visa" : c.cardType === "mastercard" ? "mastercard" : "visa",
+    color: c.color,
+    isDefault: c.isDefault,
+  };
+}
+
+function apiTxToTx(t: ApiTransaction): Transaction {
+  return {
+    id: t.id,
+    merchantName: t.recipientName ?? t.description,
+    amount: t.amount,
+    date: t.createdAt,
+    status: t.status as TransactionStatus,
+    type: t.type as TransactionType,
+    category: t.category as any,
+    cardId: t.cardId,
+    recipientName: t.recipientName,
+  };
+}
+
 const MOCK_CARDS: Card[] = [
-  {
-    id: "card-1",
-    bank: "Bank of Kigali",
-    holderName: "Alex Mugisha",
-    cardNumber: "4242 **** **** 8842",
-    expiry: "09/27",
-    balance: 450000,
-    type: "visa",
-    color: "#1B5E20",
-  },
-  {
-    id: "card-2",
-    bank: "MTN MoMo",
-    holderName: "Alex Mugisha",
-    cardNumber: "MTN **** **** 2210",
-    expiry: "12/26",
-    balance: 125500,
-    type: "momo",
-    color: "#E65100",
-  },
-  {
-    id: "card-3",
-    bank: "I&M Bank",
-    holderName: "Alex Mugisha",
-    cardNumber: "5356 **** **** 4471",
-    expiry: "03/28",
-    balance: 890000,
-    type: "mastercard",
-    color: "#0D47A1",
-  },
+  { id: "card-1", bank: "Bank of Kigali", holderName: "Alex Mugisha", cardNumber: "4242 **** **** 8842", expiry: "09/27", balance: 450000, type: "visa", color: "#1B5E20", isDefault: true },
+  { id: "card-2", bank: "MTN MoMo", holderName: "Alex Mugisha", cardNumber: "MTN **** **** 2210", expiry: "12/26", balance: 125500, type: "momo", color: "#E65100", isDefault: false },
+  { id: "card-3", bank: "I&M Bank", holderName: "Alex Mugisha", cardNumber: "5356 **** **** 4471", expiry: "03/28", balance: 890000, type: "mastercard", color: "#0D47A1", isDefault: false },
 ];
-
-const MOCK_TRANSACTIONS: Transaction[] = [
-  {
-    id: "t1",
-    merchantName: "Simba Supermarket",
-    amount: 12500,
-    date: new Date().toISOString(),
-    status: "success",
-    type: "payment",
-    category: "food",
-    cardId: "card-1",
-  },
-  {
-    id: "t2",
-    merchantName: "John Kayiranga",
-    amount: 50000,
-    date: new Date(Date.now() - 3600000).toISOString(),
-    status: "success",
-    type: "received",
-    category: "transfer",
-    cardId: "card-1",
-  },
-  {
-    id: "t3",
-    merchantName: "Nyabugogo Bus",
-    amount: 500,
-    date: new Date(Date.now() - 7200000).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "transport",
-    cardId: "card-2",
-  },
-  {
-    id: "t4",
-    merchantName: "MTN Rwanda",
-    amount: 15000,
-    date: new Date(Date.now() - 86400000).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "utilities",
-    cardId: "card-2",
-  },
-  {
-    id: "t5",
-    merchantName: "Heaven Restaurant",
-    amount: 35000,
-    date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "food",
-    cardId: "card-1",
-  },
-  {
-    id: "t6",
-    merchantName: "Kigali City Tower",
-    amount: 45000,
-    date: new Date(Date.now() - 86400000 * 2).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "shopping",
-    cardId: "card-3",
-  },
-  {
-    id: "t7",
-    merchantName: "Mary Uwimana",
-    amount: 100000,
-    date: new Date(Date.now() - 86400000 * 3).toISOString(),
-    status: "success",
-    type: "sent",
-    category: "transfer",
-    cardId: "card-1",
-  },
-  {
-    id: "t8",
-    merchantName: "Kacyiru Gas Station",
-    amount: 20000,
-    date: new Date(Date.now() - 86400000 * 3).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "transport",
-    cardId: "card-3",
-  },
-  {
-    id: "t9",
-    merchantName: "Netflix Rwanda",
-    amount: 8000,
-    date: new Date(Date.now() - 86400000 * 4).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "entertainment",
-    cardId: "card-3",
-  },
-  {
-    id: "t10",
-    merchantName: "Nakumatt Kigali",
-    amount: 28000,
-    date: new Date(Date.now() - 86400000 * 5).toISOString(),
-    status: "success",
-    type: "payment",
-    category: "shopping",
-    cardId: "card-1",
-  },
-  {
-    id: "t11",
-    merchantName: "Eric Habimana",
-    amount: 75000,
-    date: new Date(Date.now() - 86400000 * 6).toISOString(),
-    status: "success",
-    type: "received",
-    category: "transfer",
-    cardId: "card-2",
-  },
-  {
-    id: "t12",
-    merchantName: "Telecom Rwanda",
-    amount: 5000,
-    date: new Date(Date.now() - 86400000 * 7).toISOString(),
-    status: "pending",
-    type: "payment",
-    category: "utilities",
-    cardId: "card-2",
-  },
-];
-
-const DEFAULT_PROFILE: Profile = {
-  name: "Alex Mugisha",
-  phone: "+250 788 555 999",
-  email: "alex.mugisha@email.com",
-  initials: "AM",
-};
 
 interface WalletContextType {
   cards: Card[];
@@ -219,54 +86,79 @@ interface WalletContextType {
   removeCard: (id: string) => void;
   addTransaction: (tx: Omit<Transaction, "id">) => void;
   selectedCard: Card | undefined;
-  totalBalance: number;
   hideBalance: boolean;
   toggleHideBalance: () => void;
   notificationCount: number;
   clearNotifications: () => void;
   profile: Profile;
   updateProfile: (p: Partial<Profile>) => void;
+  refreshWallet: () => Promise<void>;
+  isLoading: boolean;
 }
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
 const STORAGE_KEYS = {
-  CARDS: "@rp_cards",
-  TRANSACTIONS: "@rp_transactions",
   SELECTED_CARD: "@rp_selected_card",
   HIDE_BALANCE: "@rp_hide_balance",
   PROFILE: "@rp_profile",
   NOTIFICATIONS: "@rp_notifications",
 };
 
+const DEFAULT_PROFILE: Profile = {
+  name: "Alex Mugisha",
+  phone: "+250 788 555 999",
+  email: "alex.mugisha@email.com",
+  initials: "AM",
+};
+
 export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [cards, setCards] = useState<Card[]>(MOCK_CARDS);
-  const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [selectedCardId, setSelectedCardIdState] = useState<string>(MOCK_CARDS[0].id);
   const [hideBalance, setHideBalance] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshWallet = useCallback(async () => {
+    try {
+      const [cardsRes, txRes] = await Promise.all([
+        cardsApi.list(),
+        transactionsApi.list({ limit: 50 }),
+      ]);
+      if (cardsRes.cards.length > 0) {
+        const mapped = cardsRes.cards.map(apiCardToCard);
+        setCards(mapped);
+        const def = mapped.find((c) => c.isDefault) ?? mapped[0];
+        if (def) setSelectedCardIdState(def.id);
+      }
+      if (txRes.transactions.length > 0) {
+        setTransactions(txRes.transactions.map(apiTxToTx));
+      }
+    } catch {
+      // Keep mock data on error (no auth yet)
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
       try {
-        const [sc, hb, prof, notifs, storedCards, storedTx] = await Promise.all([
+        const [sc, hb, prof, notifs] = await Promise.all([
           AsyncStorage.getItem(STORAGE_KEYS.SELECTED_CARD),
           AsyncStorage.getItem(STORAGE_KEYS.HIDE_BALANCE),
           AsyncStorage.getItem(STORAGE_KEYS.PROFILE),
           AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATIONS),
-          AsyncStorage.getItem(STORAGE_KEYS.CARDS),
-          AsyncStorage.getItem(STORAGE_KEYS.TRANSACTIONS),
         ]);
         if (sc) setSelectedCardIdState(sc);
         if (hb) setHideBalance(JSON.parse(hb));
         if (prof) setProfile(JSON.parse(prof));
         if (notifs) setNotificationCount(JSON.parse(notifs));
-        if (storedCards) setCards(JSON.parse(storedCards));
-        if (storedTx) setTransactions(JSON.parse(storedTx));
       } catch {}
+      await refreshWallet();
+      setIsLoading(false);
     })();
-  }, []);
+  }, [refreshWallet]);
 
   const setSelectedCardId = useCallback((id: string) => {
     setSelectedCardIdState(id);
@@ -294,34 +186,38 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const addCard = useCallback((card: Omit<Card, "id">) => {
-    const newCard: Card = { ...card, id: `card-${Date.now()}` };
-    setCards((prev) => {
-      const updated = [...prev, newCard];
-      AsyncStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
-  }, []);
+  const addCard = useCallback(async (card: Omit<Card, "id">) => {
+    try {
+      const last4 = card.cardNumber.slice(-4);
+      await cardsApi.add({
+        last4,
+        cardType: card.type === "momo" ? "visa" : card.type,
+        holderName: card.holderName,
+        cardName: card.bank,
+        color: card.color,
+      });
+      await refreshWallet();
+    } catch {
+      const newCard: Card = { ...card, id: `card-${Date.now()}` };
+      setCards((prev) => [...prev, newCard]);
+    }
+  }, [refreshWallet]);
 
-  const removeCard = useCallback((id: string) => {
-    setCards((prev) => {
-      const updated = prev.filter((c) => c.id !== id);
-      AsyncStorage.setItem(STORAGE_KEYS.CARDS, JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
-  }, []);
+  const removeCard = useCallback(async (id: string) => {
+    try {
+      await cardsApi.remove(id);
+      await refreshWallet();
+    } catch {
+      setCards((prev) => prev.filter((c) => c.id !== id));
+    }
+  }, [refreshWallet]);
 
   const addTransaction = useCallback((tx: Omit<Transaction, "id">) => {
     const newTx: Transaction = { ...tx, id: `tx-${Date.now()}` };
-    setTransactions((prev) => {
-      const updated = [newTx, ...prev];
-      AsyncStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(updated)).catch(() => {});
-      return updated;
-    });
+    setTransactions((prev) => [newTx, ...prev]);
   }, []);
 
   const selectedCard = cards.find((c) => c.id === selectedCardId);
-  const totalBalance = cards.reduce((s, c) => s + c.balance, 0);
 
   return (
     <WalletContext.Provider
@@ -334,13 +230,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         removeCard,
         addTransaction,
         selectedCard,
-        totalBalance,
         hideBalance,
         toggleHideBalance,
         notificationCount,
         clearNotifications,
         profile,
         updateProfile,
+        refreshWallet,
+        isLoading,
       }}
     >
       {children}

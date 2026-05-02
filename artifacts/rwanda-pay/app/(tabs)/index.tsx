@@ -14,6 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CardView from "@/components/CardView";
 import TransactionRow from "@/components/TransactionRow";
+import { useAuth } from "@/context/AuthContext";
 import { Card, useWallet } from "@/context/WalletContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -24,7 +25,7 @@ const QUICK_ACTIONS = [
   { icon: "wifi", label: "Pay", route: "/(tabs)/pay" as const, primary: true },
   { icon: "send", label: "Send", route: "/send" as const, primary: false },
   { icon: "download", label: "Receive", route: "/receive" as const, primary: false },
-  { icon: "plus", label: "Add Card", route: "/add-card" as const, primary: false },
+  { icon: "arrow-down-circle", label: "Top Up", route: "/topup" as const, primary: false },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -77,11 +78,11 @@ const insightStyles = StyleSheet.create({
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const { walletBalance } = useAuth();
   const {
     cards,
     transactions,
     setSelectedCardId,
-    totalBalance,
     hideBalance,
     toggleHideBalance,
     notificationCount,
@@ -165,9 +166,9 @@ export default function HomeScreen() {
       {/* Total balance */}
       <View style={styles.balanceRow}>
         <View>
-          <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>Total Balance</Text>
+          <Text style={[styles.balanceLabel, { color: colors.mutedForeground }]}>Wallet Balance</Text>
           <Text style={[styles.balanceAmount, { color: colors.foreground }]}>
-            {hideBalance ? "•••••••" : totalBalance.toLocaleString("en-RW")}
+            {hideBalance ? "•••••••" : walletBalance.toLocaleString("en-RW")}
             {!hideBalance && (
               <Text style={[styles.balanceCurrency, { color: colors.mutedForeground }]}> RWF</Text>
             )}

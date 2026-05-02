@@ -115,23 +115,8 @@ export default function SettingsScreen() {
     ]);
   };
 
-  const providerLabel =
-    user?.provider === "google"
-      ? "Google"
-      : user?.provider === "apple"
-      ? "Apple ID"
-      : user?.provider === "phone"
-      ? "Phone"
-      : "Demo";
-
-  const providerIcon =
-    user?.provider === "google"
-      ? "mail"
-      : user?.provider === "apple"
-      ? "smartphone"
-      : user?.provider === "phone"
-      ? "phone"
-      : "user";
+  const providerLabel = user?.email === "demo@rwandapay.rw" ? "Demo" : "Email";
+  const providerIcon = user?.email === "demo@rwandapay.rw" ? "user" : "mail";
 
   return (
     <ScrollView
