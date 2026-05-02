@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
 import { useColors } from "@/hooks/useColors";
 
@@ -41,7 +42,12 @@ function SettingRow({
       onPress={onPress}
       disabled={!onPress && !right}
     >
-      <View style={[styles.settingIcon, { backgroundColor: destructive ? `${colors.destructive}18` : colors.muted }]}>
+      <View
+        style={[
+          styles.settingIcon,
+          { backgroundColor: destructive ? `${colors.destructive}18` : colors.muted },
+        ]}
+      >
         <Feather
           name={icon as any}
           size={16}
@@ -49,36 +55,39 @@ function SettingRow({
         />
       </View>
       <View style={styles.settingInfo}>
-        <Text style={[styles.settingLabel, { color: destructive ? colors.destructive : colors.foreground }]}>
+        <Text
+          style={[
+            styles.settingLabel,
+            { color: destructive ? colors.destructive : colors.foreground },
+          ]}
+        >
           {label}
         </Text>
         {sublabel && (
-          <Text style={[styles.settingSubLabel, { color: colors.mutedForeground }]}>{sublabel}</Text>
+          <Text style={[styles.settingSubLabel, { color: colors.mutedForeground }]}>
+            {sublabel}
+          </Text>
         )}
       </View>
-      {right ?? (
-        onPress && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
-      )}
+      {right ?? (onPress && <Feather name="chevron-right" size={16} color={colors.mutedForeground} />)}
     </Pressable>
   );
 }
 
 function SectionHeader({ title }: { title: string }) {
   const colors = useColors();
-  return (
-    <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>{title}</Text>
-  );
+  return <Text style={[styles.sectionHeader, { color: colors.mutedForeground }]}>{title}</Text>;
 }
 
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { profile, updateProfile, hideBalance, toggleHideBalance, cards, removeCard } = useWallet();
+  const { profile, updateProfile, hideBalance, toggleHideBalance, cards } = useWallet();
+  const { user, signOut } = useAuth();
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState(profile.name);
   const [faceIdEnabled, setFaceIdEnabled] = useState(true);
   const [notifEnabled, setNotifEnabled] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -92,13 +101,44 @@ export default function SettingsScreen() {
     setEditingName(false);
   };
 
+  const handleSignOut = () => {
+    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Sign Out",
+        style: "destructive",
+        onPress: async () => {
+          await signOut();
+          router.replace("/auth");
+        },
+      },
+    ]);
+  };
+
+  const providerLabel =
+    user?.provider === "google"
+      ? "Google"
+      : user?.provider === "apple"
+      ? "Apple ID"
+      : user?.provider === "phone"
+      ? "Phone"
+      : "Demo";
+
+  const providerIcon =
+    user?.provider === "google"
+      ? "mail"
+      : user?.provider === "apple"
+      ? "smartphone"
+      : user?.provider === "phone"
+      ? "phone"
+      : "user";
+
   return (
     <ScrollView
       style={[styles.screen, { backgroundColor: colors.background }]}
       contentContainerStyle={{ paddingBottom: bottomPad + 90 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
       <View style={[styles.header, { paddingTop: topPad + 20 }]}>
         <Text style={[styles.title, { color: colors.foreground }]}>Settings</Text>
       </View>
@@ -111,7 +151,7 @@ export default function SettingsScreen() {
         <View style={styles.profileInfo}>
           {editingName ? (
             <TextInput
-              style={[styles.profileNameInput, { color: "#FFF", borderBottomColor: "rgba(255,255,255,0.5)" }]}
+              style={[styles.profileNameInput, { borderBottomColor: "rgba(255,255,255,0.5)" }]}
               value={editName}
               onChangeText={setEditName}
               onBlur={saveName}
@@ -126,11 +166,15 @@ export default function SettingsScreen() {
             </Pressable>
           )}
           <Text style={styles.profilePhone}>{profile.phone}</Text>
-          <Text style={styles.profileEmail}>{profile.email}</Text>
+          {user && (
+            <View style={styles.providerBadge}>
+              <Feather name={providerIcon as any} size={10} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.providerText}>Connected via {providerLabel}</Text>
+            </View>
+          )}
         </View>
       </View>
 
-      {/* Account */}
       <SectionHeader title="Account" />
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <SettingRow
@@ -153,13 +197,12 @@ export default function SettingsScreen() {
         />
       </View>
 
-      {/* Preferences */}
       <SectionHeader title="Preferences" />
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <SettingRow
           icon={hideBalance ? "eye-off" : "eye"}
           label="Hide Balance"
-          sublabel="Mask balances on cards and home"
+          sublabel="Mask amounts across the app"
           right={
             <Switch
               value={hideBalance}
@@ -182,22 +225,8 @@ export default function SettingsScreen() {
             />
           }
         />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow
-          icon="moon"
-          label="Dark Mode"
-          right={
-            <Switch
-              value={darkMode}
-              onValueChange={setDarkMode}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor="#FFF"
-            />
-          }
-        />
       </View>
 
-      {/* Security */}
       <SectionHeader title="Security" />
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <SettingRow
@@ -217,30 +246,23 @@ export default function SettingsScreen() {
         <SettingRow
           icon="key"
           label="Change PIN"
-          onPress={() =>
-            Alert.alert("Change PIN", "PIN management coming soon.", [{ text: "OK" }])
-          }
+          onPress={() => Alert.alert("Change PIN", "Coming soon.", [{ text: "OK" }])}
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow
           icon="shield"
           label="Two-Factor Authentication"
-          sublabel="SMS verification enabled"
-          onPress={() =>
-            Alert.alert("2FA", "Two-factor authentication is active.", [{ text: "OK" }])
-          }
+          sublabel="SMS verification active"
+          onPress={() => Alert.alert("2FA", "Two-factor authentication is enabled.", [{ text: "OK" }])}
         />
       </View>
 
-      {/* Support */}
       <SectionHeader title="Support" />
       <View style={[styles.section, { backgroundColor: colors.card }]}>
         <SettingRow
           icon="help-circle"
           label="Help & Support"
-          onPress={() =>
-            Alert.alert("Help", "Contact us at support@rwandapay.rw", [{ text: "OK" }])
-          }
+          onPress={() => Alert.alert("Help", "Contact: support@rwandapay.rw", [{ text: "OK" }])}
         />
         <View style={[styles.divider, { backgroundColor: colors.border }]} />
         <SettingRow
@@ -248,29 +270,14 @@ export default function SettingsScreen() {
           label="About Rwanda Pay"
           sublabel="Version 1.0.0"
           onPress={() =>
-            Alert.alert(
-              "Rwanda Pay",
-              "A premium digital wallet for Rwanda.\n\nVersion 1.0.0\n© 2025 Rwanda Pay",
-              [{ text: "OK" }]
-            )
+            Alert.alert("Rwanda Pay", "Premium digital wallet for Rwanda.\n\nVersion 1.0.0\n© 2025 Rwanda Pay", [{ text: "OK" }])
           }
         />
       </View>
 
-      {/* Logout */}
       <SectionHeader title="" />
       <View style={[styles.section, { backgroundColor: colors.card }]}>
-        <SettingRow
-          icon="log-out"
-          label="Sign Out"
-          destructive
-          onPress={() =>
-            Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Sign Out", style: "destructive", onPress: () => {} },
-            ])
-          }
-        />
+        <SettingRow icon="log-out" label="Sign Out" destructive onPress={handleSignOut} />
       </View>
     </ScrollView>
   );
@@ -298,7 +305,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   profileInitials: { color: "#FFF", fontSize: 22, fontFamily: "Inter_700Bold" },
-  profileInfo: { flex: 1, gap: 3 },
+  profileInfo: { flex: 1, gap: 4 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   profileName: { color: "#FFF", fontSize: 18, fontFamily: "Inter_700Bold" },
   profileNameInput: {
@@ -309,7 +316,17 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   profilePhone: { color: "rgba(255,255,255,0.7)", fontSize: 13, fontFamily: "Inter_400Regular" },
-  profileEmail: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontFamily: "Inter_400Regular" },
+  providerBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: "flex-start",
+  },
+  providerText: { color: "rgba(255,255,255,0.7)", fontSize: 10, fontFamily: "Inter_500Medium" },
   sectionHeader: {
     fontSize: 11,
     fontFamily: "Inter_600SemiBold",
