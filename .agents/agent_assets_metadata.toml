@@ -1,0 +1,8 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "ooEAwzjgnIDU6v6IN3WOh"
+uri = "file://artifacts/rwanda-pay/assets/images/icon.png"
+type = "image"
+title = "rwanda pay app icon"
