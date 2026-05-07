@@ -1,10 +1,10 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
-const TOKEN_KEY = "@rp_token";
+const TOKEN_KEY = "rp_token";
 
 const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
-  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}/api`
+  ? `http://${process.env.EXPO_PUBLIC_DOMAIN}/api`
   : "/api";
 
 export async function getToken(): Promise<string | null> {
