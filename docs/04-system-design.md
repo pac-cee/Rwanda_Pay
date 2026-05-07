@@ -1,42 +1,53 @@
-# Rwanda Pay — System Design
+# Phase 1 — System Design
 
 ---
 
 ## 1. High-Level Architecture
 
+Rwanda Pay follows a **client-server architecture** with a clear separation between the mobile frontend, the REST API backend, and the data layer. All three layers communicate through well-defined interfaces.
+
 ```mermaid
 graph TB
-    subgraph Mobile["Mobile App (Expo / React Native)"]
-        UI[Screen Layer<br/>Expo Router v6]
-        CTX[Context Layer<br/>AuthContext / WalletContext]
-        LIB[API Client<br/>lib/api.ts]
+    subgraph Client["Client Layer"]
+        IOS["iOS App\nExpo / React Native"]
+        ANDROID["Android App\nExpo / React Native"]
     end
 
-    subgraph Backend["API Server (Node.js / Express 5)"]
-        MW[Middleware<br/>CORS · pino-http · requireAuth]
-        RT[Route Handlers<br/>auth · wallet · cards · transactions]
-        SVC[Services<br/>JWT · bcrypt · Drizzle ORM]
+    subgraph Backend["Backend Layer"]
+        subgraph Mobile["Mobile App Internals"]
+            SCREENS["Screen Layer\nExpo Router v6"]
+            CONTEXTS["Context Layer\nAuthContext · WalletContext"]
+            APICLIENT["API Client\nlib/api.ts"]
+        end
+
+        subgraph Server["API Server"]
+            MW["Middleware\nCORS · Logger · Auth"]
+            ROUTES["Route Handlers\nauth · wallet · cards · transactions"]
+            SERVICES["Services\nJWT · bcrypt · Drizzle ORM"]
+        end
     end
 
     subgraph Data["Data Layer"]
-        PG[(PostgreSQL<br/>users · wallets · cards · transactions)]
+        SQLITE[("SQLite\nDevelopment")]
+        PG[("PostgreSQL\nProduction")]
     end
 
-    subgraph Shared["Shared Libraries (pnpm workspace)"]
-        SCHEMA[@workspace/db<br/>Drizzle schema + Zod validators]
-        APICLIENT[@workspace/api-client-react<br/>Generated React hooks]
-        APIZOD[@workspace/api-zod<br/>Zod types from OpenAPI]
+    subgraph Shared["Shared Libraries"]
+        SCHEMA["@workspace/db\nDrizzle Schema + Zod"]
+        APIZOD["@workspace/api-zod\nGenerated Types"]
     end
 
-    UI --> CTX
-    CTX --> LIB
-    LIB -->|HTTP REST JSON| MW
-    MW --> RT
-    RT --> SVC
-    SVC --> PG
-    SVC --> SCHEMA
-    RT --> SCHEMA
-    LIB --> APICLIENT
+    IOS --> SCREENS
+    ANDROID --> SCREENS
+    SCREENS --> CONTEXTS
+    CONTEXTS --> APICLIENT
+    APICLIENT -->|"HTTPS REST JSON"| MW
+    MW --> ROUTES
+    ROUTES --> SERVICES
+    SERVICES --> SCHEMA
+    SCHEMA --> SQLITE
+    SCHEMA --> PG
+    ROUTES --> SCHEMA
     APICLIENT --> APIZOD
 ```
 
@@ -44,164 +55,200 @@ graph TB
 
 ## 2. Monorepo Package Structure
 
+Rwanda Pay uses a **pnpm monorepo** to share code between the mobile app and the API server without duplication.
+
 ```mermaid
 graph LR
-    ROOT[workspace root<br/>pnpm-workspace.yaml]
+    ROOT["workspace root\npnpm-workspace.yaml"]
 
-    ROOT --> A1[artifacts/rwanda-pay<br/>Expo mobile app]
-    ROOT --> A2[artifacts/api-server<br/>Express REST API]
-    ROOT --> A3[artifacts/mockup-sandbox<br/>UI preview / Vite]
+    ROOT --> A1["artifacts/rwanda-pay\nExpo mobile app\n@workspace/rwanda-pay"]
+    ROOT --> A2["artifacts/api-server\nExpress REST API\n@workspace/api-server"]
 
-    ROOT --> L1[lib/db<br/>Drizzle schema + migrations]
-    ROOT --> L2[lib/api-spec<br/>OpenAPI YAML + Orval config]
-    ROOT --> L3[lib/api-zod<br/>Generated Zod types]
-    ROOT --> L4[lib/api-client-react<br/>Generated React query hooks]
+    ROOT --> L1["lib/db\nDrizzle schema\nZod validators\nDB connection\n@workspace/db"]
+    ROOT --> L2["lib/api-spec\nOpenAPI YAML\nOrval config"]
+    ROOT --> L3["lib/api-zod\nGenerated Zod types\n@workspace/api-zod"]
+    ROOT --> L4["lib/api-client-react\nGenerated React Query hooks\n@workspace/api-client-react"]
 
-    A1 --> L1
-    A1 --> L4
-    A2 --> L1
-    L2 --> L3
-    L2 --> L4
+    A1 -->|"imports schema + types"| L1
+    A1 -->|"imports hooks"| L4
+    A2 -->|"imports schema + DB"| L1
+    A2 -->|"imports Zod types"| L3
+    L2 -->|"generates"| L3
+    L2 -->|"generates"| L4
 ```
+
+**Why a monorepo?**
+- The database schema (`lib/db`) is shared between the API server and the mobile app — no duplication of type definitions
+- Zod validators defined once in `lib/db` are used for both API validation and client-side type checking
+- Changes to the schema automatically propagate to both the backend and frontend via TypeScript compilation
 
 ---
 
-## 3. Mobile App — Screen & Navigation Structure
+## 3. Mobile App — Screen and Navigation Structure
+
+Rwanda Pay uses **Expo Router v6** for file-based navigation. The file structure directly maps to the URL/route structure.
 
 ```mermaid
 graph TD
-    ROOT_LAYOUT[_layout.tsx<br/>AuthProvider + WalletProvider + SplashOverlay]
+    ROOT_LAYOUT["app/_layout.tsx\nRoot Layout\nAuthProvider + WalletProvider\nQueryClientProvider\nSplashOverlay"]
 
-    ROOT_LAYOUT --> AUTH[/auth<br/>Sign In / Sign Up / Demo]
-    ROOT_LAYOUT --> TABS[(tabs) _layout.tsx<br/>Bottom Tab Navigator]
+    ROOT_LAYOUT --> AUTH["/auth\nauth.tsx\nSign In / Sign Up / Demo"]
+    ROOT_LAYOUT --> TABS["/(tabs)/_layout.tsx\nBottom Tab Navigator\n5 tabs"]
 
-    TABS --> HOME[index.tsx<br/>Home — Balance + Cards + Quick Actions]
-    TABS --> PAY[pay.tsx<br/>NFC Tap-to-Pay]
-    TABS --> TRANSFER[transfer.tsx<br/>Send / Receive]
-    TABS --> ANALYTICS[analytics.tsx<br/>Spending Charts]
-    TABS --> SETTINGS[settings.tsx<br/>Profile + Preferences]
-    TABS --> TRANSACTIONS[transactions.tsx<br/>Transaction List]
+    TABS --> HOME["/(tabs)/index.tsx\nHome\nBalance · Cards carousel\nQuick actions"]
+    TABS --> PAY["/(tabs)/pay.tsx\nPay\nNFC simulation\nBiometric auth"]
+    TABS --> TRANSFER["/(tabs)/transfer.tsx\nTransfer\nSend / Receive tabs"]
+    TABS --> ANALYTICS["/(tabs)/analytics.tsx\nAnalytics\nCharts · Categories"]
+    TABS --> SETTINGS["/(tabs)/settings.tsx\nSettings\nProfile · Preferences"]
+    TABS --> TRANSACTIONS["/(tabs)/transactions.tsx\nTransactions\nHistory list"]
 
-    ROOT_LAYOUT --> SEND[/send<br/>Send Money modal]
-    ROOT_LAYOUT --> RECEIVE[/receive<br/>Receive / QR Code]
-    ROOT_LAYOUT --> TOPUP[/topup<br/>Top Up Wallet]
-    ROOT_LAYOUT --> ADDCARD[/add-card<br/>Add New Card]
-    ROOT_LAYOUT --> TXFULL[/transactions-full<br/>Full Transaction History]
-    ROOT_LAYOUT --> ANFULL[/analytics-full<br/>Full Analytics]
+    ROOT_LAYOUT --> SEND["/send\nsend.tsx\nSend Money modal"]
+    ROOT_LAYOUT --> RECEIVE["/receive\nreceive.tsx\nReceive / QR modal"]
+    ROOT_LAYOUT --> TOPUP["/topup\ntopup.tsx\nTop Up Wallet modal"]
+    ROOT_LAYOUT --> ADDCARD["/add-card\nadd-card.tsx\nAdd New Card modal"]
+    ROOT_LAYOUT --> TXFULL["/transactions-full\nFull Transaction History"]
+    ROOT_LAYOUT --> ANFULL["/analytics-full\nFull Analytics View"]
 ```
 
 ---
 
 ## 4. API Server — Request Lifecycle
 
+Every HTTP request to the API server passes through a defined middleware chain before reaching the route handler.
+
 ```mermaid
 flowchart LR
-    REQ[HTTP Request] --> CORS[CORS Middleware]
-    CORS --> LOG[pino-http Logger]
-    LOG --> BODY[express.json Parser]
-    BODY --> ROUTER[/api Router]
+    REQ["Incoming\nHTTP Request"] --> CORS["cors()\nAllow cross-origin\nfrom mobile app"]
+    CORS --> LOG["pino-http\nLog: method, URL,\nstatus, response time"]
+    LOG --> BODY["express.json()\nParse JSON body"]
+    BODY --> ROUTER["/api Router"]
 
-    ROUTER --> AUTH_RT[/auth routes<br/>register · login · me · profile · logout]
-    ROUTER --> WALLET_RT[/wallet routes<br/>GET · topup · transfer · pay]
-    ROUTER --> CARDS_RT[/cards routes<br/>list · add · delete · set-default]
-    ROUTER --> TX_RT[/transactions routes<br/>list · analytics]
-    ROUTER --> HEALTH[/healthz]
+    ROUTER --> AUTH_RT["/auth routes"]
+    ROUTER --> WALLET_RT["/wallet routes"]
+    ROUTER --> CARDS_RT["/cards routes"]
+    ROUTER --> TX_RT["/transactions routes"]
+    ROUTER --> HEALTH["/healthz"]
 
-    AUTH_RT --> REQUIRE{requireAuth?}
-    WALLET_RT --> REQUIRE
-    CARDS_RT --> REQUIRE
-    TX_RT --> REQUIRE
+    AUTH_RT --> AUTH_CHECK{"requireAuth\nmiddleware?"}
+    WALLET_RT --> AUTH_CHECK
+    CARDS_RT --> AUTH_CHECK
+    TX_RT --> AUTH_CHECK
 
-    REQUIRE -->|valid JWT| DB[(PostgreSQL<br/>via Drizzle ORM)]
-    REQUIRE -->|invalid| ERR401[401 Unauthorized]
-    DB --> RES[JSON Response]
+    AUTH_CHECK -->|"No auth needed\n(register, login)"| HANDLER["Route Handler\nZod validation\nBusiness logic\nDrizzle ORM query"]
+    AUTH_CHECK -->|"Valid JWT"| HANDLER
+    AUTH_CHECK -->|"Missing/invalid JWT"| ERR401["401 Unauthorized\n{ error: 'Unauthorized' }"]
+
+    HANDLER --> DB[("Database\nSQLite / PostgreSQL")]
+    DB --> HANDLER
+    HANDLER --> RES["JSON Response\n{ data } or { error }"]
 ```
 
 ---
 
-## 5. Authentication Flow
+## 5. Authentication and Session Management Flow
 
 ```mermaid
 flowchart TD
-    START([App Launch]) --> CHECK[getToken from expo-secure-store]
-    CHECK -->|token found| ME[GET /api/auth/me]
-    CHECK -->|no token| AUTH_SCREEN[Show Auth Screen]
+    LAUNCH(["App Launch"]) --> SPLASH["Show animated splash screen"]
+    SPLASH --> CHECK["getToken()\nexpo-secure-store"]
 
-    ME -->|200 OK| HOME[Navigate to Home]
-    ME -->|401 error| CLEAR[clearToken] --> AUTH_SCREEN
+    CHECK -->|"Token found"| ME["GET /api/auth/me\nAuthorization: Bearer token"]
+    CHECK -->|"No token"| AUTH_SCREEN["Show Auth Screen"]
 
-    AUTH_SCREEN --> REGISTER[Register Form]
-    AUTH_SCREEN --> LOGIN[Login Form]
-    AUTH_SCREEN --> DEMO[Demo Button]
+    ME -->|"200 OK"| SET_USER["setUser(user)\nsetWalletBalance(balance)\nisAuthChecked = true"]
+    ME -->|"401 Unauthorized"| CLEAR["clearToken()\nisAuthChecked = true"]
+    CLEAR --> AUTH_SCREEN
 
-    REGISTER --> POST_REG[POST /api/auth/register]
-    LOGIN --> POST_LOGIN[POST /api/auth/login]
-    DEMO --> TRY_LOGIN[POST /api/auth/login<br/>demo@rwandapay.rw]
-    TRY_LOGIN -->|fail| AUTO_REG[POST /api/auth/register<br/>auto-create demo account]
+    SET_USER --> HOME["Navigate to /(tabs)\nHome Screen"]
 
-    POST_REG --> STORE[storeToken + setUser]
-    POST_LOGIN --> STORE
-    AUTO_REG --> STORE
-    TRY_LOGIN -->|success| STORE
+    AUTH_SCREEN --> REG["Register Form"]
+    AUTH_SCREEN --> LOGIN["Login Form"]
+    AUTH_SCREEN --> DEMO["Demo Button"]
+
+    REG --> POST_REG["POST /api/auth/register"]
+    LOGIN --> POST_LOGIN["POST /api/auth/login"]
+    DEMO --> TRY_LOGIN["POST /api/auth/login\ndemo@rwandapay.rw"]
+    TRY_LOGIN -->|"401 - no account"| AUTO_REG["POST /api/auth/register\nauto-create demo account"]
+
+    POST_REG -->|"201"| STORE["storeToken(token)\nsetUser(user)\nsetWalletBalance(balance)"]
+    POST_LOGIN -->|"200"| STORE
+    TRY_LOGIN -->|"200"| STORE
+    AUTO_REG -->|"201"| STORE
+
     STORE --> HOME
+
+    HOME --> LOGOUT["User taps Sign Out"]
+    LOGOUT --> CLEAR_ALL["clearToken()\nsetUser(null)\nsetWalletBalance(0)"]
+    CLEAR_ALL --> AUTH_SCREEN
 ```
 
 ---
 
-## 6. Data Flow — Wallet Top-Up
+## 6. State Management Architecture
 
-```mermaid
-flowchart LR
-    USER([User]) -->|selects card + amount| TOPUP_SCREEN[TopUp Screen]
-    TOPUP_SCREEN -->|POST /api/wallet/topup| API[API Server]
-    API -->|validate cardId ownership| CARDS_DB[(cards table)]
-    CARDS_DB --> API
-    API -->|read current balance| WALLET_DB[(wallets table)]
-    WALLET_DB --> API
-    API -->|UPDATE balance += amount| WALLET_DB
-    API -->|INSERT transaction type=topup| TX_DB[(transactions table)]
-    TX_DB --> API
-    API -->|{ transaction, balance }| TOPUP_SCREEN
-    TOPUP_SCREEN -->|setWalletBalance| AUTH_CTX[AuthContext]
-    AUTH_CTX --> HOME[Home Screen re-renders balance]
-```
-
----
-
-## 7. State Management Architecture
+Rwanda Pay uses **React Context API** for global state management. There are two providers: `AuthContext` for user identity and `WalletContext` for financial data.
 
 ```mermaid
 graph TD
-    subgraph Providers["React Context Providers (app/_layout.tsx)"]
-        AUTH[AuthContext<br/>user · walletBalance · isAuthChecked · isSigningIn]
-        WALLET[WalletContext<br/>cards · transactions · selectedCard · hideBalance · profile]
+    subgraph Providers["React Context Providers — app/_layout.tsx"]
+        AUTH["AuthContext\n─────────────────\nuser: ApiUser | null\nwalletBalance: number\nisAuthChecked: boolean\nisSigningIn: boolean\n─────────────────\nsignIn() signUp()\nsignInDemo() signOut()\nrefreshBalance()"]
+
+        WALLET["WalletContext\n─────────────────\ncards: Card[]\ntransactions: Transaction[]\nselectedCardId: string\nhideBalance: boolean\nisLoading: boolean\n─────────────────\nrefreshWallet()\naddCard() removeCard()\naddTransaction()\ntoggleHideBalance()"]
     end
 
     subgraph Persistence["Persistence Layer"]
-        SECURE[expo-secure-store<br/>JWT token]
-        ASYNC[AsyncStorage<br/>selectedCard · hideBalance · profile · notifications]
+        SECURE["expo-secure-store\nJWT token\n(encrypted)"]
+        ASYNC["AsyncStorage\nselectedCard\nhideBalance\nprofile\nnotifications"]
     end
 
-    subgraph Screens["Screens / Components"]
-        HOME[Home]
-        PAY[Pay]
-        TRANSFER[Transfer]
-        ANALYTICS[Analytics]
-        SETTINGS[Settings]
-        TRANSACTIONS[Transactions]
+    subgraph Screens["Screens that consume context"]
+        HOME["Home\nbalance · cards · transactions"]
+        PAY["Pay\nbalance check · add transaction"]
+        SEND["Send\nbalance · add transaction"]
+        TOPUP["TopUp\ncards · add transaction"]
+        ANALYTICS["Analytics\ntransactions"]
+        SETTINGS["Settings\nuser · hideBalance · profile"]
+        TRANSACTIONS["Transactions\ntransactions list"]
     end
+
+    AUTH <-->|"read/write token"| SECURE
+    WALLET <-->|"read/write prefs"| ASYNC
 
     AUTH --> HOME
     AUTH --> SETTINGS
     WALLET --> HOME
     WALLET --> PAY
-    WALLET --> TRANSFER
+    WALLET --> SEND
+    WALLET --> TOPUP
     WALLET --> ANALYTICS
     WALLET --> SETTINGS
     WALLET --> TRANSACTIONS
+```
 
-    AUTH <--> SECURE
-    WALLET <--> ASYNC
+---
+
+## 7. Data Flow — Wallet Top-Up
+
+A detailed trace of data through all layers for the top-up operation.
+
+```mermaid
+flowchart LR
+    USER(["User"]) -->|"Selects card\nEnters 10,000 RWF"| TOPUP_SCR["TopUp Screen\ntopup.tsx"]
+    TOPUP_SCR -->|"walletApi.topup(cardId, 10000)"| API_CLIENT["lib/api.ts\nPOST /api/wallet/topup\nBearer token"]
+    API_CLIENT -->|"HTTP POST"| AUTH_MW["requireAuth\nVerify JWT\nAttach req.user"]
+    AUTH_MW -->|"req.user.userId"| WALLET_RT["wallet route handler\nValidate topupSchema"]
+    WALLET_RT -->|"SELECT card WHERE id=? AND userId=?"| CARDS_DB[("cards table")]
+    CARDS_DB -->|"card record"| WALLET_RT
+    WALLET_RT -->|"SELECT wallet WHERE userId=?"| WALLET_DB[("wallets table")]
+    WALLET_DB -->|"{ balance: 50000 }"| WALLET_RT
+    WALLET_RT -->|"UPDATE balance = 60000"| WALLET_DB
+    WALLET_RT -->|"INSERT transaction type=topup"| TX_DB[("transactions table")]
+    TX_DB -->|"transaction record"| WALLET_RT
+    WALLET_RT -->|"{ transaction, balance: 60000 }"| API_CLIENT
+    API_CLIENT -->|"{ transaction, balance }"| TOPUP_SCR
+    TOPUP_SCR -->|"setWalletBalance(60000)"| AUTH_CTX["AuthContext\nUpdates balance state"]
+    TOPUP_SCR -->|"addTransaction(tx)"| WALLET_CTX["WalletContext\nPrepends to transactions"]
+    AUTH_CTX -->|"Re-renders"| HOME_SCR["Home Screen\nShows 60,000 RWF"]
 ```
 
 ---
@@ -211,87 +258,127 @@ graph TD
 ```mermaid
 erDiagram
     USERS {
-        uuid id PK
-        text email UK
-        text password_hash
-        text name
-        text phone
-        text initials
-        timestamp created_at
-        timestamp updated_at
+        text id PK "UUID"
+        text email UK "NOT NULL"
+        text password_hash "NOT NULL, never returned in API"
+        text name "NOT NULL"
+        text phone "nullable"
+        text initials "NOT NULL, 1-2 chars"
+        integer created_at "Unix timestamp"
+        integer updated_at "Unix timestamp"
     }
 
     WALLETS {
-        uuid id PK
-        uuid user_id FK
-        integer balance
-        timestamp created_at
-        timestamp updated_at
+        text id PK "UUID"
+        text user_id FK "UNIQUE, CASCADE DELETE"
+        integer balance "NOT NULL, DEFAULT 0, in RWF"
+        integer created_at "Unix timestamp"
+        integer updated_at "Unix timestamp"
     }
 
     CARDS {
-        uuid id PK
-        uuid user_id FK
-        text last4
-        text card_type
-        text holder_name
-        text card_name
-        text color
-        boolean is_default
-        timestamp created_at
+        text id PK "UUID"
+        text user_id FK "CASCADE DELETE"
+        text last4 "NOT NULL, exactly 4 chars"
+        text card_type "visa / mastercard / amex"
+        text holder_name "NOT NULL"
+        text card_name "NOT NULL, display name"
+        text color "NOT NULL, hex color"
+        integer is_default "0 or 1 (boolean)"
+        integer created_at "Unix timestamp"
     }
 
     TRANSACTIONS {
-        uuid id PK
-        uuid user_id FK
-        text type
-        integer amount
-        text description
-        text status
-        uuid card_id FK
-        uuid recipient_id FK
-        text recipient_name
-        text category
-        timestamp created_at
+        text id PK "UUID"
+        text user_id FK "CASCADE DELETE"
+        text type "topup / send / receive / payment"
+        integer amount "NOT NULL, in RWF"
+        text description "NOT NULL"
+        text status "success / failed"
+        text card_id FK "SET NULL on card delete"
+        text recipient_id FK "SET NULL on user delete"
+        text recipient_name "nullable, denormalized"
+        text category "food/transport/shopping/entertainment/health/other"
+        integer created_at "Unix timestamp"
     }
 
-    USERS ||--|| WALLETS : "has one"
-    USERS ||--o{ CARDS : "has many"
-    USERS ||--o{ TRANSACTIONS : "creates"
-    CARDS ||--o{ TRANSACTIONS : "linked to"
-    USERS ||--o{ TRANSACTIONS : "recipient of"
+    USERS ||--|| WALLETS : "has exactly one"
+    USERS ||--o{ CARDS : "has zero or many"
+    USERS ||--o{ TRANSACTIONS : "creates zero or many"
+    CARDS ||--o{ TRANSACTIONS : "referenced by zero or many"
+    USERS ||--o{ TRANSACTIONS : "is recipient of zero or many"
 ```
 
 ---
 
-## 9. Deployment Architecture
+## 9. Security Architecture
+
+```mermaid
+flowchart TD
+    subgraph MobileLayer["Mobile Security"]
+        SECURE_STORE["expo-secure-store\nJWT encrypted at rest\nOS keychain / keystore"]
+        BIO_AUTH["expo-local-authentication\nFace ID / Fingerprint\nRequired for every payment"]
+        NO_PLAIN["No plaintext secrets\nin AsyncStorage"]
+    end
+
+    subgraph TransportLayer["Transport Security"]
+        HTTPS["HTTPS in production\nTLS 1.2+"]
+        BEARER["Authorization: Bearer token\non every protected request"]
+    end
+
+    subgraph APILayer["API Security"]
+        JWT_VERIFY["JWT signature verification\nHS256 algorithm\nExpiry check (7 days)"]
+        BCRYPT["bcrypt password hashing\ncost factor 10\n~100ms per hash"]
+        ZOD_VAL["Zod input validation\nRejects malformed input\nbefore any DB access"]
+        NO_HASH["passwordHash stripped\nfrom all API responses"]
+        SCOPE["User scoping\nAll queries filter by req.user.userId\nCannot access other users' data"]
+    end
+
+    subgraph DBLayer["Database Security"]
+        CASCADE["CASCADE DELETE\nNo orphaned records"]
+        SET_NULL["SET NULL on FK delete\nNo broken references"]
+        INT_AMOUNTS["Integer amounts\nNo floating point precision issues"]
+    end
+
+    SECURE_STORE --> BEARER
+    BIO_AUTH --> JWT_VERIFY
+    BEARER --> JWT_VERIFY
+    JWT_VERIFY --> ZOD_VAL
+    ZOD_VAL --> SCOPE
+    SCOPE --> CASCADE
+```
+
+---
+
+## 10. Deployment Architecture
 
 ```mermaid
 graph TB
-    subgraph Client["Client Devices"]
-        IOS[iOS App<br/>Expo standalone]
-        ANDROID[Android App<br/>Expo standalone]
+    subgraph Devices["User Devices"]
+        IOS["iPhone\niOS 14+\nExpo Go / Standalone"]
+        ANDROID["Android Phone\nAndroid 10+\nExpo Go / Standalone"]
     end
 
-    subgraph Server["Replit / Cloud Server"]
-        API_SRV[API Server<br/>Node.js 24 · Express 5<br/>Port 8080]
-        STATIC[Static Server<br/>Landing Page<br/>Port 20371]
+    subgraph Cloud["Cloud / Server"]
+        subgraph Container["Docker Container (Production)"]
+            API["API Server\nNode.js 24 · Express 5\nPort 8080"]
+        end
+        subgraph DBServer["Database Server"]
+            PG[("PostgreSQL 15\nManaged DB")]
+        end
     end
 
-    subgraph DB["Database"]
-        PG[(PostgreSQL 15<br/>Replit managed)]
+    subgraph EnvVars["Environment Variables"]
+        SECRET["SESSION_SECRET\nJWT signing key"]
+        DB_URL["DATABASE_URL\nPostgreSQL connection string"]
+        PORT["PORT=8080"]
+        DOMAIN["EXPO_PUBLIC_DOMAIN\nAPI server URL for mobile app"]
     end
 
-    subgraph ENV["Environment Variables"]
-        SECRET[SESSION_SECRET]
-        DB_URL[DATABASE_URL / PGHOST etc.]
-        DOMAIN[EXPO_PUBLIC_DOMAIN]
-    end
-
-    IOS -->|HTTPS REST| API_SRV
-    ANDROID -->|HTTPS REST| API_SRV
-    API_SRV --> PG
-    ENV --> API_SRV
-    ENV --> IOS
-    ENV --> ANDROID
+    IOS -->|"HTTPS REST\nAuthorization: Bearer"| API
+    ANDROID -->|"HTTPS REST\nAuthorization: Bearer"| API
+    API -->|"Drizzle ORM\nSQL queries"| PG
+    EnvVars --> API
+    DOMAIN --> IOS
+    DOMAIN --> ANDROID
 ```
