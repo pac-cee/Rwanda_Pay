@@ -1,24 +1,23 @@
-import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { cardsTable } from "./cards";
 import { usersTable } from "./users";
 
-export const transactionsTable = pgTable("transactions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
+export const transactionsTable = sqliteTable("transactions", {
+  id: text("id").primaryKey().$defaultFn(() => randomUUID()),
+  userId: text("user_id")
     .notNull()
     .references(() => usersTable.id, { onDelete: "cascade" }),
   type: text("type").notNull(),
   amount: integer("amount").notNull(),
   description: text("description").notNull(),
   status: text("status").notNull().default("success"),
-  cardId: uuid("card_id").references(() => cardsTable.id, { onDelete: "set null" }),
-  recipientId: uuid("recipient_id").references(() => usersTable.id, {
-    onDelete: "set null",
-  }),
+  cardId: text("card_id").references(() => cardsTable.id, { onDelete: "set null" }),
+  recipientId: text("recipient_id").references(() => usersTable.id, { onDelete: "set null" }),
   recipientName: text("recipient_name"),
   category: text("category").notNull().default("other"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
 });
 
 export const topupSchema = z.object({
