@@ -53,7 +53,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsSigningIn(true);
     try {
       const { user: u, wallet, token } = await authApi.register({ email, password, name, phone });
-      await storeToken(token);
+      try {
+        await storeToken(token);
+      } catch (storeErr: any) {
+        console.error("storeToken failed:", storeErr?.message);
+      }
       setWalletBalance(wallet.balance);
       setUser(u);
     } finally {
@@ -65,7 +69,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsSigningIn(true);
     try {
       const { user: u, wallet, token } = await authApi.login({ email, password });
-      await storeToken(token);
+      try {
+        await storeToken(token);
+      } catch (storeErr: any) {
+        console.error("storeToken failed:", storeErr?.message);
+        // Continue even if storage fails — user still gets logged in
+      }
       setWalletBalance(wallet.balance);
       setUser(u);
     } finally {

@@ -24,25 +24,17 @@ const queryClient = new QueryClient();
 
 function AppNavigator() {
   const { user, isAuthChecked } = useAuth();
-  const [minTimeDone, setMinTimeDone] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
-  // Enforce minimum 1.5s splash so the animation plays fully
+  // Navigate immediately when auth check is done — splash plays on top independently
   useEffect(() => {
-    const t = setTimeout(() => setMinTimeDone(true), 1500);
-    return () => clearTimeout(t);
-  }, []);
-
-  const readyToExit = minTimeDone && isAuthChecked;
-
-  const handleSplashFinish = () => {
-    setShowSplash(false);
+    if (!isAuthChecked) return;
     if (user) {
       router.replace("/(tabs)");
     } else {
       router.replace("/auth");
     }
-  };
+  }, [isAuthChecked, user]);
 
   return (
     <>
@@ -56,12 +48,7 @@ function AppNavigator() {
         <Stack.Screen name="transactions-full" />
         <Stack.Screen name="analytics-full" />
       </Stack>
-      {showSplash && (
-        <SplashOverlay
-          readyToExit={readyToExit}
-          onFinish={handleSplashFinish}
-        />
-      )}
+      {showSplash && <SplashOverlay onFinish={() => setShowSplash(false)} />}
     </>
   );
 }

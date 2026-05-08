@@ -7,6 +7,8 @@ const BASE_URL = process.env.EXPO_PUBLIC_DOMAIN
   ? `http://${process.env.EXPO_PUBLIC_DOMAIN}/api`
   : "/api";
 
+console.log("[API] BASE_URL:", BASE_URL);
+
 export async function getToken(): Promise<string | null> {
   try {
     if (Platform.OS === "web") return localStorage.getItem(TOKEN_KEY);
@@ -28,7 +30,8 @@ export async function clearToken(): Promise<void> {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getToken();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const url = `${BASE_URL}${path}`;
+  const res = await fetch(url, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -36,8 +39,14 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       ...(options?.headers ?? {}),
     },
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error((data as any).error ?? "Request failed");
+  const text = await res.text();
+  let data: any;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error(`Non-JSON response (${res.status}): ${text.slice(0, 200)}`);
+  }
+  if (!res.ok) throw new Error(data?.error ?? `Request failed (${res.status})`);
   return data as T;
 }
 

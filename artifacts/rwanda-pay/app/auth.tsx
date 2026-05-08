@@ -117,14 +117,14 @@ export default function AuthScreen() {
       return;
     }
     try {
-      if (mode === "signin") {
-        await signIn(email.trim().toLowerCase(), password);
-      } else {
-        await signUp(email.trim().toLowerCase(), password, name.trim(), phone.trim() || undefined);
-      }
-    } catch (err: any) {
-      Alert.alert("Error", err.message ?? "Something went wrong. Please try again.");
+    if (mode === "signin") {
+      await signIn(email.trim().toLowerCase(), password);
+    } else {
+      await signUp(email.trim().toLowerCase(), password, name.trim(), phone.trim() || undefined);
     }
+  } catch (err: any) {
+    Alert.alert("Error", err?.message ?? String(err));
+  }
   };
 
   const btnLabel = mode === "signin" ? "Sign In" : "Create Account";

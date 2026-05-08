@@ -19,7 +19,6 @@ const ACCENT = "#FFD600";
 
 interface SplashOverlayProps {
   onFinish: () => void;
-  readyToExit: boolean;
 }
 
 function PulseRing({ delay, size }: { delay: number; size: number }) {
@@ -61,7 +60,7 @@ function PulseRing({ delay, size }: { delay: number; size: number }) {
   );
 }
 
-export default function SplashOverlay({ onFinish, readyToExit }: SplashOverlayProps) {
+export default function SplashOverlay({ onFinish }: SplashOverlayProps) {
   const logoScale = useSharedValue(0.2);
   const logoOpacity = useSharedValue(0);
   const titleY = useSharedValue(24);
@@ -69,26 +68,22 @@ export default function SplashOverlay({ onFinish, readyToExit }: SplashOverlayPr
   const taglineOpacity = useSharedValue(0);
   const accentOpacity = useSharedValue(0);
   const overlayOpacity = useSharedValue(1);
-  const introsDone = useSharedValue(false);
 
   useEffect(() => {
     logoScale.value = withSpring(1, { damping: 14, stiffness: 180 });
     logoOpacity.value = withTiming(1, { duration: 350 });
-    titleY.value = withDelay(450, withTiming(0, { duration: 450 }));
-    titleOpacity.value = withDelay(450, withTiming(1, { duration: 450 }));
-    taglineOpacity.value = withDelay(750, withTiming(1, { duration: 400 }));
-    accentOpacity.value = withDelay(900, withTiming(1, { duration: 300 }, () => {
-      introsDone.value = true;
-    }));
-  }, []);
-
-  useEffect(() => {
-    if (readyToExit) {
-      overlayOpacity.value = withTiming(0, { duration: 500 }, (finished) => {
+    titleY.value = withDelay(300, withTiming(0, { duration: 400 }));
+    titleOpacity.value = withDelay(300, withTiming(1, { duration: 400 }));
+    taglineOpacity.value = withDelay(550, withTiming(1, { duration: 350 }));
+    accentOpacity.value = withDelay(550, withTiming(1, { duration: 300 }));
+    // Fade out after 1.4s total
+    overlayOpacity.value = withDelay(
+      1400,
+      withTiming(0, { duration: 400 }, (finished) => {
         if (finished) runOnJS(onFinish)();
-      });
-    }
-  }, [readyToExit]);
+      })
+    );
+  }, []);
 
   const logoStyle = useAnimatedStyle(() => ({
     transform: [{ scale: logoScale.value }],
