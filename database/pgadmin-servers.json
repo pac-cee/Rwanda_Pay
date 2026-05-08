@@ -1,0 +1,15 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Rwanda Pay DB",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "rwanda_pay",
+      "Username": "admin",
+      "Password": "admin",
+      "SSLMode": "prefer",
+      "SavePassword": true
+    }
+  }
+}

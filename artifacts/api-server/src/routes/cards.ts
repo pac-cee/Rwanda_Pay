@@ -6,6 +6,12 @@ import { requireAuth } from "../middlewares/requireAuth.js";
 
 const router = Router();
 
+// Strip sensitive fields before sending to client
+function publicCard(card: typeof cardsTable.$inferSelect) {
+  const { cardNumber: _cn, cvv: _cvv, ...rest } = card;
+  return rest;
+}
+
 // GET /api/cards
 router.get("/", requireAuth, async (req, res) => {
   try {
@@ -14,7 +20,7 @@ router.get("/", requireAuth, async (req, res) => {
       .from(cardsTable)
       .where(eq(cardsTable.userId, req.user!.userId))
       .orderBy(cardsTable.createdAt);
-    res.json({ cards });
+    res.json({ cards: cards.map(publicCard) });
   } catch (err) {
     req.log.error({ err }, "list cards error");
     res.status(500).json({ error: "Failed to fetch cards" });
@@ -29,12 +35,14 @@ router.post("/", requireAuth, async (req, res) => {
       res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
       return;
     }
-    const { last4, cardType, holderName, cardName, color } = parsed.data;
+    const { cardNumber, expiryDate, cvv, holderName, network, label, color } = parsed.data;
 
-    const CARD_COLORS: Record<string, string> = {
+    const last4 = cardNumber.slice(-4);
+
+    const NETWORK_COLORS: Record<string, string> = {
       visa: "#1B5E20",
-      mastercard: "#00AEEF",
-      amex: "#FFD600",
+      mastercard: "#E65100",
+      amex: "#0D47A1",
     };
 
     const existingCards = await db
@@ -47,15 +55,19 @@ router.post("/", requireAuth, async (req, res) => {
       .insert(cardsTable)
       .values({
         userId: req.user!.userId,
+        cardNumber,
+        cvv,
         last4,
-        cardType,
+        expiryDate,
         holderName,
-        cardName: cardName ?? `My ${cardType.charAt(0).toUpperCase() + cardType.slice(1)} Card`,
-        color: color ?? CARD_COLORS[cardType] ?? "#1B5E20",
+        network,
+        label: label ?? `My ${network.charAt(0).toUpperCase() + network.slice(1)} Card`,
+        color: color ?? NETWORK_COLORS[network] ?? "#1B5E20",
         isDefault: isFirst,
       })
       .returning();
-    res.status(201).json({ card });
+
+    res.status(201).json({ card: publicCard(card) });
   } catch (err) {
     req.log.error({ err }, "add card error");
     res.status(500).json({ error: "Failed to add card" });
@@ -66,18 +78,37 @@ router.post("/", requireAuth, async (req, res) => {
 router.delete("/:id", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    const userId = req.user!.userId;
+
     const [card] = await db
       .select()
       .from(cardsTable)
-      .where(and(eq(cardsTable.id, id!), eq(cardsTable.userId, req.user!.userId)))
+      .where(and(eq(cardsTable.id, id!), eq(cardsTable.userId, userId)))
       .limit(1);
     if (!card) {
       res.status(404).json({ error: "Card not found" });
       return;
     }
+
     await db
       .delete(cardsTable)
-      .where(and(eq(cardsTable.id, id!), eq(cardsTable.userId, req.user!.userId)));
+      .where(and(eq(cardsTable.id, id!), eq(cardsTable.userId, userId)));
+
+    // If deleted card was default, promote the next card
+    if (card.isDefault) {
+      const [next] = await db
+        .select()
+        .from(cardsTable)
+        .where(eq(cardsTable.userId, userId))
+        .limit(1);
+      if (next) {
+        await db
+          .update(cardsTable)
+          .set({ isDefault: true })
+          .where(eq(cardsTable.id, next.id));
+      }
+    }
+
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "delete card error");
@@ -101,20 +132,18 @@ router.put("/:id/default", requireAuth, async (req, res) => {
       return;
     }
 
-    // Unset all defaults for this user
     await db
       .update(cardsTable)
       .set({ isDefault: false })
       .where(eq(cardsTable.userId, userId));
 
-    // Set this card as default
     const [updated] = await db
       .update(cardsTable)
       .set({ isDefault: true })
       .where(eq(cardsTable.id, id!))
       .returning();
 
-    res.json({ card: updated });
+    res.json({ card: publicCard(updated) });
   } catch (err) {
     req.log.error({ err }, "set default card error");
     res.status(500).json({ error: "Failed to set default card" });

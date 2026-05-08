@@ -1,40 +1,43 @@
 version: "3.9"
 
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: rwanda_pay_db
+  postgres:
+    image: postgres:16-alpine
+    container_name: rwanda-pay-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-rwandapay}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rwandapay_secret}
-      POSTGRES_DB: ${POSTGRES_DB:-rwandapay}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_DB: rwanda_pay
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rwandapay}"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d rwanda_pay"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  api:
-    build:
-      context: .
-      dockerfile: artifacts/api-server/Dockerfile
-    container_name: rwanda_pay_api
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rwanda-pay-pgadmin
     restart: unless-stopped
     depends_on:
-      db:
+      postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
-      PORT: 8080
-      DATABASE_URL: postgresql://${POSTGRES_USER:-rwandapay}:${POSTGRES_PASSWORD:-rwandapay_secret}@db:5432/${POSTGRES_DB:-rwandapay}
-      SESSION_SECRET: ${SESSION_SECRET:-change_this_in_production_min_32_chars}
+      PGADMIN_DEFAULT_EMAIL: admin@rwandapay.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: "False"
     ports:
-      - "8080:8080"
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./database/pgadmin-servers.json:/pgadmin4/servers.json
 
 volumes:
   postgres_data:
+  pgadmin_data:

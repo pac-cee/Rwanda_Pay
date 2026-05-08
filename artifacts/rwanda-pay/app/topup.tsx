@@ -30,7 +30,7 @@ function formatAmount(n: number): string {
 export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
   const colors = useColors();
-  const { cards } = useWallet();
+  const { cards, refreshWallet } = useWallet();
   const { walletBalance, setWalletBalance } = useAuth();
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [amount, setAmount] = useState("");
@@ -61,6 +61,7 @@ export default function TopUpScreen() {
       const { walletApi } = await import("@/lib/api");
       const { balance } = await walletApi.topup({ cardId: selectedCardId, amount: amt });
       setWalletBalance(balance);
+      await refreshWallet();
       Alert.alert("Success!", `${formatAmount(amt)} added to your wallet.`, [
         { text: "Done", onPress: () => router.back() },
       ]);

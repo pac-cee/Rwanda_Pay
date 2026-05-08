@@ -23,7 +23,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CardView from "@/components/CardView";
 import PaymentAnimation, { PaymentStatus } from "@/components/PaymentAnimation";
 import { useWallet } from "@/context/WalletContext";
+import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { walletApi } from "@/lib/api";
 import { Feather } from "@expo/vector-icons";
 
 type FlowState =
@@ -163,7 +165,8 @@ const authStyles = StyleSheet.create({
 export default function PayScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { selectedCard, addTransaction, hideBalance } = useWallet();
+  const { selectedCard, addTransaction, hideBalance, refreshWallet } = useWallet();
+  const { setWalletBalance } = useAuth();
   const [flow, setFlow] = useState<FlowState>("idle");
   const [merchant, setMerchant] = useState("");
   const [amount, setAmount] = useState("");
@@ -259,24 +262,23 @@ export default function PayScreen() {
     // Proceed with payment
     setFlow("processing");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    await new Promise((r) => setTimeout(r, 1500));
 
-    const amountNum = parseFloat(amount.replace(/,/g, "")) || Math.floor(Math.random() * 20000) + 2000;
+    const amountNum = parseInt(amount.replace(/[^0-9]/g, ""), 10) || Math.floor(Math.random() * 20000) + 2000;
     const merchantName = merchant.trim() || "Rwanda Merchant";
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setFlow("success");
-
-    if (selectedCard) {
-      addTransaction({
-        merchantName,
+    try {
+      const { balance } = await walletApi.pay({
         amount: amountNum,
-        date: new Date().toISOString(),
-        status: "success",
-        type: "payment",
+        description: merchantName,
         category: "shopping",
-        cardId: selectedCard.id,
       });
+      setWalletBalance(balance);
+      await refreshWallet();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setFlow("success");
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setFlow("failed");
     }
 
     setTimeout(() => {

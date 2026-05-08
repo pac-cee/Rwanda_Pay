@@ -1,0 +1,442 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Rwanda Pay API",
+    "version": "1.0.0",
+    "description": "Digital wallet and tap-to-pay API for Rwanda. All monetary values are in RWF (Rwandan Franc) stored as integers."
+  },
+  "servers": [
+    { "url": "http://localhost:8080", "description": "Local development" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": { "type": "string" }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "name": { "type": "string" },
+          "phone": { "type": "string", "nullable": true },
+          "initials": { "type": "string" },
+          "is_verified": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Wallet": {
+        "type": "object",
+        "properties": {
+          "balance": { "type": "integer", "description": "Balance in RWF" },
+          "currency": { "type": "string", "example": "RWF" },
+          "frozen": { "type": "boolean" }
+        }
+      },
+      "Card": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "last4": { "type": "string", "example": "4242" },
+          "expiry_date": { "type": "string", "example": "12/27" },
+          "holder_name": { "type": "string" },
+          "network": { "type": "string", "enum": ["visa", "mastercard", "amex"] },
+          "label": { "type": "string", "example": "Bank of Kigali" },
+          "color": { "type": "string", "example": "#1B5E20" },
+          "balance": { "type": "integer", "description": "Card balance in RWF" },
+          "is_default": { "type": "boolean" },
+          "status": { "type": "string", "enum": ["active", "frozen", "expired", "cancelled"] }
+        }
+      },
+      "Transaction": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "type": { "type": "string", "enum": ["topup", "payment", "send", "receive", "refund", "withdrawal"] },
+          "status": { "type": "string", "enum": ["pending", "success", "failed", "reversed"] },
+          "amount": { "type": "integer", "description": "Amount in RWF" },
+          "description": { "type": "string" },
+          "category": { "type": "string" },
+          "balance_before": { "type": "integer" },
+          "balance_after": { "type": "integer" },
+          "is_nfc": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Merchant": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "merchant_code": { "type": "string" },
+          "city": { "type": "string" },
+          "is_verified": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/healthz": {
+      "get": {
+        "summary": "Health check",
+        "tags": ["System"],
+        "responses": {
+          "200": { "description": "Service is healthy" }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "summary": "Register a new user",
+        "description": "Creates a user account and a wallet with 0 RWF balance.",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password", "name"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string", "minLength": 6 },
+                  "name": { "type": "string" },
+                  "phone": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean" },
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "user": { "$ref": "#/components/schemas/User" },
+                        "wallet": { "$ref": "#/components/schemas/Wallet" },
+                        "token": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid input" },
+          "409": { "description": "Email already registered" }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Login",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": { "type": "string", "format": "email" },
+                  "password": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Login successful, returns JWT token" },
+          "400": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Get current user and wallet balance",
+        "tags": ["Auth"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Current user and wallet" },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/auth/profile": {
+      "put": {
+        "summary": "Update profile",
+        "tags": ["Auth"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "phone": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Profile updated" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Logout",
+        "tags": ["Auth"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Logged out" }
+        }
+      }
+    },
+    "/api/v1/wallet": {
+      "get": {
+        "summary": "Get wallet balance",
+        "tags": ["Wallet"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Wallet balance in RWF" }
+        }
+      }
+    },
+    "/api/v1/wallet/topup": {
+      "post": {
+        "summary": "Top up wallet from a card",
+        "description": "Transfers money FROM the card's balance INTO the wallet. The card must have sufficient balance.",
+        "tags": ["Wallet"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["card_id", "amount"],
+                "properties": {
+                  "card_id": { "type": "string", "format": "uuid" },
+                  "amount": { "type": "integer", "minimum": 500, "maximum": 5000000, "description": "Amount in RWF" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Top-up successful, returns transaction and new balance" },
+          "400": { "description": "Insufficient card balance, invalid amount, or card inactive" },
+          "404": { "description": "Card not found" }
+        }
+      }
+    },
+    "/api/v1/wallet/transfer": {
+      "post": {
+        "summary": "Transfer money to another user",
+        "description": "Sends money from your wallet to another registered user by email.",
+        "tags": ["Wallet"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["recipient_email", "amount", "description"],
+                "properties": {
+                  "recipient_email": { "type": "string", "format": "email" },
+                  "amount": { "type": "integer", "minimum": 100 },
+                  "description": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Transfer successful" },
+          "400": { "description": "Insufficient funds, self-transfer, or invalid input" },
+          "404": { "description": "Recipient not found" }
+        }
+      }
+    },
+    "/api/v1/wallet/pay": {
+      "post": {
+        "summary": "Make a payment from wallet",
+        "description": "Deducts from wallet balance. Optionally links to a merchant via merchant_code.",
+        "tags": ["Wallet"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount", "description"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 1 },
+                  "description": { "type": "string" },
+                  "category": { "type": "string", "enum": ["food", "transport", "shopping", "entertainment", "health", "utilities", "education", "other"] },
+                  "merchant_code": { "type": "string", "description": "e.g. SIMBA001" },
+                  "is_nfc": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Payment successful" },
+          "400": { "description": "Insufficient funds or wallet frozen" }
+        }
+      }
+    },
+    "/api/v1/cards": {
+      "get": {
+        "summary": "List all cards",
+        "tags": ["Cards"],
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "List of cards (card_number and cvv never returned)" }
+        }
+      },
+      "post": {
+        "summary": "Add a new card",
+        "description": "Card number and CVV are encrypted with AES-256 before storage. Only last4 is returned.",
+        "tags": ["Cards"],
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["card_number", "expiry_date", "cvv", "holder_name"],
+                "properties": {
+                  "card_number": { "type": "string", "description": "16 digits, no spaces" },
+                  "expiry_date": { "type": "string", "example": "12/27" },
+                  "cvv": { "type": "string", "description": "3 or 4 digits" },
+                  "holder_name": { "type": "string" },
+                  "network": { "type": "string", "enum": ["visa", "mastercard", "amex"], "default": "visa" },
+                  "label": { "type": "string", "example": "Bank of Kigali" },
+                  "color": { "type": "string", "example": "#1B5E20" },
+                  "balance": { "type": "integer", "description": "Initial card balance in RWF", "default": 0 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Card added successfully" },
+          "400": { "description": "Invalid card details" }
+        }
+      }
+    },
+    "/api/v1/cards/{id}/balance": {
+      "put": {
+        "summary": "Add balance to a card",
+        "description": "Loads funds onto the card. Use this to simulate adding money to a card before topping up the wallet.",
+        "tags": ["Cards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["amount"],
+                "properties": {
+                  "amount": { "type": "integer", "minimum": 1, "maximum": 10000000 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Card balance updated" },
+          "404": { "description": "Card not found" }
+        }
+      }
+    },
+    "/api/v1/cards/{id}/default": {
+      "put": {
+        "summary": "Set card as default",
+        "tags": ["Cards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Card set as default" },
+          "404": { "description": "Card not found" }
+        }
+      }
+    },
+    "/api/v1/cards/{id}": {
+      "delete": {
+        "summary": "Delete a card",
+        "tags": ["Cards"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": { "description": "Card deleted" },
+          "404": { "description": "Card not found" }
+        }
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "summary": "List transactions",
+        "tags": ["Transactions"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+          { "name": "type", "in": "query", "schema": { "type": "string", "enum": ["topup", "payment", "send", "receive"] } }
+        ],
+        "responses": {
+          "200": { "description": "Paginated transaction list" }
+        }
+      }
+    },
+    "/api/v1/transactions/analytics": {
+      "get": {
+        "summary": "Spending analytics",
+        "tags": ["Transactions"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "period", "in": "query", "schema": { "type": "integer", "default": 30, "description": "Number of days" } }
+        ],
+        "responses": {
+          "200": { "description": "Analytics: total_in, total_out, by_category, monthly breakdown" }
+        }
+      }
+    }
+  }
+}

@@ -78,7 +78,7 @@ const insightStyles = StyleSheet.create({
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { walletBalance } = useAuth();
+  const { walletBalance, user } = useAuth();
   const {
     cards,
     transactions,
@@ -99,14 +99,14 @@ export default function HomeScreen() {
   const thisWeekSpend = transactions
     .filter(
       (t) =>
-        (t.type === "payment" || t.type === "sent") &&
+        (t.type === "payment" || t.type === "send") &&
         Date.now() - new Date(t.date).getTime() < 7 * 86400000
     )
     .reduce((s, t) => s + t.amount, 0);
 
   const categoryTotals: Record<string, number> = {};
   transactions
-    .filter((t) => t.type === "payment" || t.type === "sent")
+    .filter((t) => t.type === "payment" || t.type === "send")
     .forEach((t) => {
       categoryTotals[t.category] = (categoryTotals[t.category] ?? 0) + t.amount;
     });
@@ -141,11 +141,11 @@ export default function HomeScreen() {
             style={[styles.avatar, { backgroundColor: colors.primary }]}
             onPress={() => router.push("/(tabs)/settings")}
           >
-            <Text style={styles.avatarText}>{profile.initials}</Text>
+            <Text style={[styles.avatarText]}>{user?.initials ?? profile.initials}</Text>
           </Pressable>
           <View>
             <Text style={[styles.greeting, { color: colors.mutedForeground }]}>Good morning 👋</Text>
-            <Text style={[styles.userName, { color: colors.foreground }]}>{profile.name}</Text>
+            <Text style={[styles.userName, { color: colors.foreground }]}>{user?.name ?? profile.name}</Text>
           </View>
         </View>
         <Pressable
@@ -197,6 +197,27 @@ export default function HomeScreen() {
           if (cards[idx]) setSelectedCardId(cards[idx].id);
         }}
         scrollEventThrottle={16}
+        ListEmptyComponent={
+          <Pressable
+            style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => router.push("/add-card")}
+          >
+            <Feather name="plus-circle" size={32} color={colors.primary} />
+            <Text style={[styles.emptyCardText, { color: colors.foreground }]}>Add your first card</Text>
+            <Text style={[styles.emptyCardSub, { color: colors.mutedForeground }]}>Tap to link a card</Text>
+          </Pressable>
+        }
+        ListFooterComponent={
+          cards.length > 0 ? (
+            <Pressable
+              style={[styles.addCardBtn, { backgroundColor: colors.muted, borderColor: colors.border }]}
+              onPress={() => router.push("/add-card")}
+            >
+              <Feather name="plus" size={24} color={colors.primary} />
+              <Text style={[styles.addCardBtnText, { color: colors.primary }]}>Add Card</Text>
+            </Pressable>
+          ) : null
+        }
       />
 
       {/* Dot indicators */}
@@ -408,4 +429,19 @@ const styles = StyleSheet.create({
   },
   empty: { alignItems: "center", paddingVertical: 32, gap: 10 },
   emptyText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  emptyCard: {
+    width: CARD_WIDTH, height: 180, borderRadius: 20,
+    borderWidth: 2, borderStyle: "dashed",
+    alignItems: "center", justifyContent: "center", gap: 10,
+    marginHorizontal: 4,
+  },
+  emptyCardText: { fontSize: 16, fontFamily: "Inter_600SemiBold" },
+  emptyCardSub: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  addCardBtn: {
+    width: 100, height: 180, borderRadius: 20,
+    borderWidth: 2, borderStyle: "dashed",
+    alignItems: "center", justifyContent: "center", gap: 8,
+    marginHorizontal: 4,
+  },
+  addCardBtnText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
 });

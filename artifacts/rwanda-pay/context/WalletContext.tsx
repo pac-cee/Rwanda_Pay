@@ -46,12 +46,12 @@ export interface Profile {
 function apiCardToCard(c: ApiCard): Card {
   return {
     id: c.id,
-    bank: c.cardName,
+    bank: c.label,
     holderName: c.holderName,
-    cardNumber: `${c.cardType.toUpperCase()} •••• •••• ${c.last4}`,
-    expiry: "••/••",
+    cardNumber: `•••• •••• •••• ${c.last4}`,
+    expiry: c.expiryDate,
     balance: 0,
-    type: c.cardType === "visa" ? "visa" : c.cardType === "mastercard" ? "mastercard" : "visa",
+    type: c.network === "mastercard" ? "mastercard" : c.network === "amex" ? "visa" : "visa",
     color: c.color,
     isDefault: c.isDefault,
   };
@@ -71,11 +71,7 @@ function apiTxToTx(t: ApiTransaction): Transaction {
   };
 }
 
-const MOCK_CARDS: Card[] = [
-  { id: "card-1", bank: "Bank of Kigali", holderName: "Alex Mugisha", cardNumber: "4242 **** **** 8842", expiry: "09/27", balance: 450000, type: "visa", color: "#1B5E20", isDefault: true },
-  { id: "card-2", bank: "MTN MoMo", holderName: "Alex Mugisha", cardNumber: "MTN **** **** 2210", expiry: "12/26", balance: 125500, type: "momo", color: "#E65100", isDefault: false },
-  { id: "card-3", bank: "I&M Bank", holderName: "Alex Mugisha", cardNumber: "5356 **** **** 4471", expiry: "03/28", balance: 890000, type: "mastercard", color: "#0D47A1", isDefault: false },
-];
+const MOCK_CARDS: Card[] = [];
 
 interface WalletContextType {
   cards: Card[];
@@ -92,6 +88,7 @@ interface WalletContextType {
   clearNotifications: () => void;
   profile: Profile;
   updateProfile: (p: Partial<Profile>) => void;
+  setProfileFromUser: (u: { name: string; phone: string | null; email: string; initials: string }) => void;
   refreshWallet: () => Promise<void>;
   isLoading: boolean;
 }
@@ -106,16 +103,16 @@ const STORAGE_KEYS = {
 };
 
 const DEFAULT_PROFILE: Profile = {
-  name: "Alex Mugisha",
-  phone: "+250 788 555 999",
-  email: "alex.mugisha@email.com",
-  initials: "AM",
+  name: "",
+  phone: "",
+  email: "",
+  initials: "",
 };
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
-  const [cards, setCards] = useState<Card[]>(MOCK_CARDS);
+  const [cards, setCards] = useState<Card[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [selectedCardId, setSelectedCardIdState] = useState<string>(MOCK_CARDS[0].id);
+  const [selectedCardId, setSelectedCardIdState] = useState<string>("");
   const [hideBalance, setHideBalance] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
@@ -127,17 +124,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         cardsApi.list(),
         transactionsApi.list({ limit: 50 }),
       ]);
-      if (cardsRes.cards.length > 0) {
-        const mapped = cardsRes.cards.map(apiCardToCard);
-        setCards(mapped);
-        const def = mapped.find((c) => c.isDefault) ?? mapped[0];
-        if (def) setSelectedCardIdState(def.id);
-      }
-      if (txRes.transactions.length > 0) {
-        setTransactions(txRes.transactions.map(apiTxToTx));
-      }
+      const mapped = cardsRes.cards.map(apiCardToCard);
+      setCards(mapped);
+      const def = mapped.find((c) => c.isDefault) ?? mapped[0];
+      if (def) setSelectedCardIdState(def.id);
+      setTransactions(txRes.transactions.map(apiTxToTx));
     } catch {
-      // Keep mock data on error (no auth yet)
+      // API not ready yet (unauthenticated)
     }
   }, []);
 
@@ -178,6 +171,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATIONS, "0").catch(() => {});
   }, []);
 
+  const setProfileFromUser = useCallback((u: { name: string; phone: string | null; email: string; initials: string }) => {
+    setProfile({ name: u.name, phone: u.phone ?? "", email: u.email, initials: u.initials });
+  }, []);
+
   const updateProfile = useCallback((p: Partial<Profile>) => {
     setProfile((prev) => {
       const next = { ...prev, ...p };
@@ -188,18 +185,18 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
   const addCard = useCallback(async (card: Omit<Card, "id">) => {
     try {
-      const last4 = card.cardNumber.slice(-4);
       await cardsApi.add({
-        last4,
-        cardType: card.type === "momo" ? "visa" : card.type,
+        cardNumber: card.cardNumber.replace(/\s/g, ""),
+        expiryDate: card.expiry,
+        cvv: (card as any).cvv ?? "000",
         holderName: card.holderName,
-        cardName: card.bank,
+        network: card.type === "momo" ? "mastercard" : card.type,
+        label: card.bank,
         color: card.color,
       });
       await refreshWallet();
-    } catch {
-      const newCard: Card = { ...card, id: `card-${Date.now()}` };
-      setCards((prev) => [...prev, newCard]);
+    } catch (err) {
+      throw err;
     }
   }, [refreshWallet]);
 
@@ -207,8 +204,8 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     try {
       await cardsApi.remove(id);
       await refreshWallet();
-    } catch {
-      setCards((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      throw err;
     }
   }, [refreshWallet]);
 
@@ -238,6 +235,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         updateProfile,
         refreshWallet,
         isLoading,
+        setProfileFromUser,
       }}
     >
       {children}

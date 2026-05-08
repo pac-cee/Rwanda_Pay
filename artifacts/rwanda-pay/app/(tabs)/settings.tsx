@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useWallet } from "@/context/WalletContext";
 import { useColors } from "@/hooks/useColors";
+import { authApi } from "@/lib/api";
 
 function SettingRow({
   icon,
@@ -82,21 +83,24 @@ function SectionHeader({ title }: { title: string }) {
 export default function SettingsScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { profile, updateProfile, hideBalance, toggleHideBalance, cards } = useWallet();
+  const { hideBalance, toggleHideBalance, cards } = useWallet();
   const { user, signOut } = useAuth();
+  const displayName = user?.name ?? "";
+  const displayInitials = user?.initials ?? "";
+  const displayPhone = user?.phone ?? "";
   const [editingName, setEditingName] = useState(false);
-  const [editName, setEditName] = useState(profile.name);
+  const [editName, setEditName] = useState(displayName);
   const [faceIdEnabled, setFaceIdEnabled] = useState(true);
   const [notifEnabled, setNotifEnabled] = useState(true);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const saveName = () => {
-    if (editName.trim()) {
-      const parts = editName.trim().split(" ");
-      const initials = parts.map((p) => p[0]?.toUpperCase() ?? "").slice(0, 2).join("");
-      updateProfile({ name: editName.trim(), initials });
+  const saveName = async () => {
+    if (editName.trim() && editName.trim() !== displayName) {
+      try {
+        await authApi.updateProfile({ name: editName.trim() });
+      } catch {}
     }
     setEditingName(false);
   };
@@ -131,7 +135,7 @@ export default function SettingsScreen() {
       {/* Profile card */}
       <View style={[styles.profileCard, { backgroundColor: colors.primary }]}>
         <View style={styles.profileAvatar}>
-          <Text style={styles.profileInitials}>{profile.initials}</Text>
+          <Text style={styles.profileInitials}>{displayInitials}</Text>
         </View>
         <View style={styles.profileInfo}>
           {editingName ? (
@@ -145,12 +149,12 @@ export default function SettingsScreen() {
               returnKeyType="done"
             />
           ) : (
-            <Pressable onPress={() => { setEditName(profile.name); setEditingName(true); }} style={styles.nameRow}>
-              <Text style={styles.profileName}>{profile.name}</Text>
+            <Pressable onPress={() => { setEditName(displayName); setEditingName(true); }} style={styles.nameRow}>
+              <Text style={styles.profileName}>{displayName}</Text>
               <Feather name="edit-2" size={12} color="rgba(255,255,255,0.6)" />
             </Pressable>
           )}
-          <Text style={styles.profilePhone}>{profile.phone}</Text>
+          <Text style={styles.profilePhone}>{displayPhone}</Text>
           {user && (
             <View style={styles.providerBadge}>
               <Feather name={providerIcon as any} size={10} color="rgba(255,255,255,0.7)" />

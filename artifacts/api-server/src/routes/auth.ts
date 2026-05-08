@@ -1,8 +1,6 @@
 import {
-  cardsTable,
   loginSchema,
   registerSchema,
-  transactionsTable,
   usersTable,
   walletsTable,
 } from "@workspace/db";
@@ -52,30 +50,10 @@ router.post("/register", async (req, res) => {
       .values({ email, passwordHash, name, phone, initials })
       .returning();
 
-    // Create wallet with 50,000 RWF welcome balance
     const [wallet] = await db
       .insert(walletsTable)
-      .values({ userId: user.id, balance: 50000 })
+      .values({ userId: user.id, balance: 0 })
       .returning();
-
-    // Seed 3 demo cards
-    const seedCards = [
-      { userId: user.id, last4: "8842", cardType: "visa", holderName: name, cardName: "Bank of Kigali", color: "#1B5E20", isDefault: true },
-      { userId: user.id, last4: "2210", cardType: "mastercard", holderName: name, cardName: "MTN MoMo", color: "#E65100", isDefault: false },
-      { userId: user.id, last4: "4471", cardType: "mastercard", holderName: name, cardName: "I&M Bank", color: "#0D47A1", isDefault: false },
-    ];
-    const cards = await db.insert(cardsTable).values(seedCards).returning();
-
-    // Seed demo transactions
-    const now = new Date();
-    const seedTx = [
-      { userId: user.id, type: "receive", amount: 50000, description: "Welcome bonus", status: "success", category: "other", recipientName: "Rwanda Pay", createdAt: new Date(now.getTime() - 1000) },
-      { userId: user.id, type: "payment", amount: 12500, description: "Simba Supermarket", status: "success", category: "food", cardId: cards[0].id, createdAt: new Date(now.getTime() - 3600000) },
-      { userId: user.id, type: "payment", amount: 500, description: "Nyabugogo Bus", status: "success", category: "transport", cardId: cards[1].id, createdAt: new Date(now.getTime() - 7200000) },
-      { userId: user.id, type: "payment", amount: 35000, description: "Heaven Restaurant", status: "success", category: "food", cardId: cards[0].id, createdAt: new Date(now.getTime() - 86400000) },
-      { userId: user.id, type: "payment", amount: 45000, description: "Kigali City Tower", status: "success", category: "shopping", cardId: cards[2].id, createdAt: new Date(now.getTime() - 172800000) },
-    ];
-    await db.insert(transactionsTable).values(seedTx);
 
     const token = signToken({ userId: user.id, email: user.email });
     res.status(201).json({ user: publicUser(user), wallet: { balance: wallet.balance }, token });

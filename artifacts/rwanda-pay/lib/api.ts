@@ -1,4 +1,4 @@
-import * as SecureStore from "expo-secure-store";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 const TOKEN_KEY = "rp_token";
@@ -11,21 +11,18 @@ console.log("[API] BASE_URL:", BASE_URL);
 
 export async function getToken(): Promise<string | null> {
   try {
-    if (Platform.OS === "web") return localStorage.getItem(TOKEN_KEY);
-    return SecureStore.getItemAsync(TOKEN_KEY);
+    return await AsyncStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
 }
 
 export async function storeToken(token: string): Promise<void> {
-  if (Platform.OS === "web") localStorage.setItem(TOKEN_KEY, token);
-  else await SecureStore.setItemAsync(TOKEN_KEY, token);
+  await AsyncStorage.setItem(TOKEN_KEY, token);
 }
 
 export async function clearToken(): Promise<void> {
-  if (Platform.OS === "web") localStorage.removeItem(TOKEN_KEY);
-  else await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -62,9 +59,10 @@ export interface ApiUser {
 export interface ApiCard {
   id: string;
   last4: string;
-  cardType: string;
+  expiryDate: string;
+  network: string;
   holderName: string;
-  cardName: string;
+  label: string;
   color: string;
   isDefault: boolean;
   createdAt: string;
@@ -121,7 +119,7 @@ export const walletApi = {
 
 export const cardsApi = {
   list: () => request<{ cards: ApiCard[] }>("/cards"),
-  add: (body: { last4: string; cardType: string; holderName: string; cardName?: string; color?: string }) =>
+  add: (body: { cardNumber: string; expiryDate: string; cvv: string; holderName: string; network: string; label?: string; color?: string }) =>
     request<{ card: ApiCard }>("/cards", { method: "POST", body: JSON.stringify(body) }),
   remove: (id: string) => request<{ success: boolean }>(`/cards/${id}`, { method: "DELETE" }),
   setDefault: (id: string) => request<{ card: ApiCard }>(`/cards/${id}/default`, { method: "PUT" }),

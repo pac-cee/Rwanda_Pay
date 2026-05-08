@@ -76,9 +76,9 @@ export default function SplashOverlay({ onFinish }: SplashOverlayProps) {
     titleOpacity.value = withDelay(300, withTiming(1, { duration: 400 }));
     taglineOpacity.value = withDelay(550, withTiming(1, { duration: 350 }));
     accentOpacity.value = withDelay(550, withTiming(1, { duration: 300 }));
-    // Fade out after 1.4s total
+    // Fade out after 2.5s total
     overlayOpacity.value = withDelay(
-      1400,
+      2100,
       withTiming(0, { duration: 400 }, (finished) => {
         if (finished) runOnJS(onFinish)();
       })

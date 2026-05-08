@@ -44,6 +44,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
+  const signIn = useCallback(async (email: string, password: string) => {
+    setIsSigningIn(true);
+    try {
+      const { user: u, wallet, token } = await authApi.login({ email, password });
+      await storeToken(token);
+      setWalletBalance(wallet.balance);
+      setUser(u);
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, []);
+
   const signUp = useCallback(async (
     email: string,
     password: string,
@@ -53,28 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsSigningIn(true);
     try {
       const { user: u, wallet, token } = await authApi.register({ email, password, name, phone });
-      try {
-        await storeToken(token);
-      } catch (storeErr: any) {
-        console.error("storeToken failed:", storeErr?.message);
-      }
-      setWalletBalance(wallet.balance);
-      setUser(u);
-    } finally {
-      setIsSigningIn(false);
-    }
-  }, []);
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    setIsSigningIn(true);
-    try {
-      const { user: u, wallet, token } = await authApi.login({ email, password });
-      try {
-        await storeToken(token);
-      } catch (storeErr: any) {
-        console.error("storeToken failed:", storeErr?.message);
-        // Continue even if storage fails — user still gets logged in
-      }
+      await storeToken(token);
       setWalletBalance(wallet.balance);
       setUser(u);
     } finally {
@@ -84,7 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInDemo = useCallback(async () => {
     setIsSigningIn(true);
-    const demoEmail = "demo@rwandapay.rw";
+    const demoEmail = "demo@rwandapay.com";
     const demoPass = "demo1234";
     try {
       try {
@@ -96,8 +87,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { user: u, wallet, token } = await authApi.register({
           email: demoEmail,
           password: demoPass,
-          name: "Alex Mugisha",
-          phone: "+250788555999",
+          name: "Demo User",
+          phone: "+250788000000",
         });
         await storeToken(token);
         setWalletBalance(wallet.balance);

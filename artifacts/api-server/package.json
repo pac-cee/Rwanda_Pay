@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development PORT=8080 DATABASE_URL=$(pwd)/rwanda-pay.db && pnpm run build && pnpm run start",
+    "dev": "export NODE_ENV=development PORT=8080 SESSION_SECRET=rwanda-pay-dev-secret-2025 DATABASE_URL=$(pwd)/rwanda-pay.db && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit"
