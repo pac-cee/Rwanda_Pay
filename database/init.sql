@@ -1,6 +1,7 @@
 -- ============================================================
 -- Rwanda Pay Database Schema
 -- PostgreSQL 16
+-- Clean schema — start fresh
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -40,7 +41,8 @@ CREATE INDEX idx_users_email ON users(email);
 
 -- ============================================================
 -- WALLETS
--- One per user. Balance starts at 0. Payments come from here.
+-- One per user. Balance starts at 0.
+-- Payments always come from wallet balance.
 -- ============================================================
 
 CREATE TABLE wallets (
@@ -57,15 +59,16 @@ CREATE INDEX idx_wallets_user_id ON wallets(user_id);
 
 -- ============================================================
 -- CARDS
--- Each card has its own balance. User tops up wallet FROM a card.
--- card_number and cvv are AES-256 encrypted — never returned in API.
+-- Each card has its own balance (simulated).
+-- User tops up wallet FROM a card.
+-- card_number and cvv are AES-256-GCM encrypted — never returned in API.
 -- ============================================================
 
 CREATE TABLE cards (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 
-    -- Sensitive — AES-256 encrypted, never returned in API responses
+    -- Sensitive — AES-256-GCM encrypted, never returned in API responses
     card_number     TEXT NOT NULL,
     cvv             TEXT NOT NULL,
 
@@ -76,7 +79,7 @@ CREATE TABLE cards (
     network         card_network NOT NULL DEFAULT 'visa',
     label           VARCHAR(100) NOT NULL DEFAULT 'My Card',
     color           CHAR(7) NOT NULL DEFAULT '#1B5E20',
-    balance         BIGINT NOT NULL DEFAULT 0 CHECK (balance >= 0),  -- card's own balance in RWF
+    balance         BIGINT NOT NULL DEFAULT 0 CHECK (balance >= 0),
     is_default      BOOLEAN NOT NULL DEFAULT FALSE,
     status          card_status NOT NULL DEFAULT 'active',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -165,9 +168,10 @@ CREATE INDEX idx_transactions_status ON transactions(status);
 CREATE INDEX idx_transactions_merchant_id ON transactions(merchant_id);
 CREATE INDEX idx_transactions_created_at ON transactions(created_at DESC);
 CREATE INDEX idx_transactions_reference ON transactions(reference);
+CREATE INDEX idx_transactions_recipient_id ON transactions(recipient_id);
 
 -- ============================================================
--- TRIGGERS
+-- TRIGGERS — auto-update updated_at
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION set_updated_at()
