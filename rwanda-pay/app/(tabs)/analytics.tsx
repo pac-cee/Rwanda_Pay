@@ -67,7 +67,7 @@ export default function AnalyticsScreen() {
       transactions.filter(
         (tx) =>
           new Date(tx.date).getTime() >= cutoff &&
-          (tx.type === "payment" || tx.type === "sent" || tx.type === "send")
+          (tx.type === "payment" || tx.type === "send")
       ),
     [transactions, cutoff]
   );
