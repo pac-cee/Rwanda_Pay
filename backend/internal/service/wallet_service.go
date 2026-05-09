@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -40,7 +39,7 @@ type WalletResult struct {
 }
 
 type WalletService struct {
-	walletRepo       repository.WalletRepository
+	walletRepo       repository.WalletTxRepository
 	cardRepo         repository.CardRepository
 	userRepo         repository.UserRepository
 	merchantRepo     repository.MerchantRepository
@@ -49,7 +48,7 @@ type WalletService struct {
 }
 
 func NewWalletService(
-	walletRepo repository.WalletRepository,
+	walletRepo repository.WalletTxRepository,
 	cardRepo repository.CardRepository,
 	userRepo repository.UserRepository,
 	merchantRepo repository.MerchantRepository,
@@ -74,8 +73,9 @@ func (s *WalletService) GetBalance(ctx context.Context, userID string) (*domain.
 	return wallet, nil
 }
 
-// Topup transfers money FROM a card's balance INTO the user's wallet.
-// The card must belong to the user, be active, and have sufficient balance.
+// Topup transfers money FROM a card's balance INTO the user's wallet atomically.
+// Uses TopupTx which wraps the card debit + wallet credit in a single DB transaction
+// with row-level locks — no race conditions possible.
 func (s *WalletService) Topup(ctx context.Context, in TopupInput) (*WalletResult, error) {
 	if in.Amount < 500 {
 		return nil, fmt.Errorf("%w: minimum top-up is 500 RWF", domain.ErrInvalidInput)
@@ -84,48 +84,26 @@ func (s *WalletService) Topup(ctx context.Context, in TopupInput) (*WalletResult
 		return nil, fmt.Errorf("%w: maximum top-up is 5,000,000 RWF", domain.ErrInvalidInput)
 	}
 
-	// Verify card belongs to user and is active
+	// Verify card belongs to user (ownership check before locking)
 	card, err := s.cardRepo.GetByIDAndUserID(ctx, in.CardID, in.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if card.Status == domain.CardStatusFrozen {
-		return nil, domain.ErrCardFrozen
-	}
-	if card.Status != domain.CardStatusActive {
-		return nil, domain.ErrCardExpired
-	}
 
-	// Check card has enough balance
-	if card.Balance < in.Amount {
-		return nil, fmt.Errorf("%w: card has %d RWF, need %d RWF",
-			domain.ErrInsufficientCardFunds, card.Balance, in.Amount)
-	}
-
-	// Get wallet and check it's not frozen
+	// Get wallet ID for the user
 	wallet, err := s.walletRepo.GetByUserID(ctx, in.UserID)
 	if err != nil {
 		return nil, err
 	}
-	if wallet.IsFrozen {
-		return nil, domain.ErrWalletFrozen
+
+	// Atomic: debit card + credit wallet in one DB transaction with row-level locks
+	newWalletBalance, _, err := s.walletRepo.TopupTx(ctx, wallet.ID, card.ID, in.Amount)
+	if err != nil {
+		return nil, err
 	}
 
-	// Deduct from card
-	newCardBalance := card.Balance - in.Amount
-	if err := s.cardRepo.UpdateBalance(ctx, card.ID, newCardBalance); err != nil {
-		return nil, fmt.Errorf("deduct from card: %w", err)
-	}
-
-	// Credit wallet
-	newWalletBalance := wallet.Balance + in.Amount
-	if err := s.walletRepo.UpdateBalance(ctx, wallet.ID, newWalletBalance); err != nil {
-		// Attempt rollback
-		_ = s.cardRepo.UpdateBalance(ctx, card.ID, card.Balance)
-		return nil, fmt.Errorf("credit wallet: %w", err)
-	}
-
-	// Record transaction
+	// Record transaction (outside the balance lock — idempotent insert)
+	balanceBefore := wallet.Balance
 	tx := &domain.Transaction{
 		ID:            uuid.NewString(),
 		UserID:        in.UserID,
@@ -136,7 +114,7 @@ func (s *WalletService) Topup(ctx context.Context, in TopupInput) (*WalletResult
 		Description:   fmt.Sprintf("Top up from %s ••••%s", card.Label, card.Last4),
 		Category:      domain.TxCategoryOther,
 		CardID:        &card.ID,
-		BalanceBefore: &wallet.Balance,
+		BalanceBefore: &balanceBefore,
 		BalanceAfter:  &newWalletBalance,
 	}
 	if err := s.txRepo.Create(ctx, tx); err != nil {
@@ -146,7 +124,8 @@ func (s *WalletService) Topup(ctx context.Context, in TopupInput) (*WalletResult
 	return &WalletResult{Transaction: tx, Balance: newWalletBalance}, nil
 }
 
-// Transfer sends money from one user's wallet to another user's wallet.
+// Transfer sends money from one user's wallet to another atomically.
+// Uses TransferTx which locks both wallets in UUID-ascending order to prevent deadlocks.
 func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*WalletResult, error) {
 	if strings.EqualFold(in.SenderEmail, in.RecipientEmail) {
 		return nil, domain.ErrSelfTransfer
@@ -155,45 +134,31 @@ func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*Wallet
 		return nil, fmt.Errorf("%w: minimum transfer is 100 RWF", domain.ErrInvalidInput)
 	}
 
+	// Look up recipient
+	recipient, err := s.userRepo.GetByEmail(ctx, strings.ToLower(in.RecipientEmail))
+	if err != nil {
+		return nil, domain.ErrRecipientNotFound
+	}
+
+	// Get both wallet IDs
 	senderWallet, err := s.walletRepo.GetByUserID(ctx, in.SenderID)
 	if err != nil {
 		return nil, fmt.Errorf("get sender wallet: %w", err)
 	}
-	if senderWallet.IsFrozen {
-		return nil, domain.ErrWalletFrozen
-	}
-	if senderWallet.Balance < in.Amount {
-		return nil, fmt.Errorf("%w: wallet has %d RWF, need %d RWF",
-			domain.ErrInsufficientFunds, senderWallet.Balance, in.Amount)
-	}
-
-	recipient, err := s.userRepo.GetByEmail(ctx, strings.ToLower(in.RecipientEmail))
-	if errors.Is(err, domain.ErrNotFound) {
-		return nil, domain.ErrRecipientNotFound
-	}
-	if err != nil {
-		return nil, fmt.Errorf("get recipient: %w", err)
-	}
-
 	recipientWallet, err := s.walletRepo.GetByUserID(ctx, recipient.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get recipient wallet: %w", err)
 	}
 
-	// Deduct from sender
-	newSenderBalance := senderWallet.Balance - in.Amount
-	if err := s.walletRepo.UpdateBalance(ctx, senderWallet.ID, newSenderBalance); err != nil {
-		return nil, fmt.Errorf("deduct from sender: %w", err)
+	senderBalanceBefore := senderWallet.Balance
+
+	// Atomic: debit sender + credit recipient in one DB transaction with deadlock-safe locking
+	newSenderBalance, _, err := s.walletRepo.TransferTx(ctx, senderWallet.ID, recipientWallet.ID, in.Amount)
+	if err != nil {
+		return nil, err
 	}
 
-	// Credit recipient
-	newRecipientBalance := recipientWallet.Balance + in.Amount
-	if err := s.walletRepo.UpdateBalance(ctx, recipientWallet.ID, newRecipientBalance); err != nil {
-		_ = s.walletRepo.UpdateBalance(ctx, senderWallet.ID, senderWallet.Balance) // rollback
-		return nil, fmt.Errorf("credit recipient: %w", err)
-	}
-
-	// Sender transaction
+	// Record sender transaction
 	senderTx := &domain.Transaction{
 		ID:            uuid.NewString(),
 		UserID:        in.SenderID,
@@ -204,14 +169,16 @@ func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*Wallet
 		Category:      domain.TxCategoryOther,
 		RecipientID:   &recipient.ID,
 		RecipientName: &recipient.Name,
-		BalanceBefore: &senderWallet.Balance,
+		BalanceBefore: &senderBalanceBefore,
 		BalanceAfter:  &newSenderBalance,
 	}
 	if err := s.txRepo.Create(ctx, senderTx); err != nil {
 		return nil, fmt.Errorf("record send transaction: %w", err)
 	}
 
-	// Recipient transaction
+	// Record recipient transaction
+	recipientBalanceBefore := recipientWallet.Balance
+	newRecipientBalance := recipientBalanceBefore + in.Amount
 	senderName := in.SenderEmail
 	recipientTx := &domain.Transaction{
 		ID:            uuid.NewString(),
@@ -222,7 +189,7 @@ func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*Wallet
 		Description:   fmt.Sprintf("Received from %s", senderName),
 		Category:      domain.TxCategoryOther,
 		RecipientName: &senderName,
-		BalanceBefore: &recipientWallet.Balance,
+		BalanceBefore: &recipientBalanceBefore,
 		BalanceAfter:  &newRecipientBalance,
 	}
 	if err := s.txRepo.Create(ctx, recipientTx); err != nil {
@@ -232,8 +199,8 @@ func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*Wallet
 	return &WalletResult{Transaction: senderTx, Balance: newSenderBalance}, nil
 }
 
-// Pay deducts from the user's wallet balance (not from a card).
-// Payments always come from the wallet.
+// Pay deducts from the user's wallet balance atomically.
+// Payments always come from the wallet, never directly from a card.
 func (s *WalletService) Pay(ctx context.Context, in PayInput) (*WalletResult, error) {
 	if in.Amount < 1 {
 		return nil, fmt.Errorf("%w: amount must be greater than 0", domain.ErrInvalidInput)
@@ -243,17 +210,13 @@ func (s *WalletService) Pay(ctx context.Context, in PayInput) (*WalletResult, er
 	if err != nil {
 		return nil, fmt.Errorf("get wallet: %w", err)
 	}
-	if wallet.IsFrozen {
-		return nil, domain.ErrWalletFrozen
-	}
-	if wallet.Balance < in.Amount {
-		return nil, fmt.Errorf("%w: wallet has %d RWF, need %d RWF",
-			domain.ErrInsufficientFunds, wallet.Balance, in.Amount)
-	}
 
-	newBalance := wallet.Balance - in.Amount
-	if err := s.walletRepo.UpdateBalance(ctx, wallet.ID, newBalance); err != nil {
-		return nil, fmt.Errorf("deduct from wallet: %w", err)
+	balanceBefore := wallet.Balance
+
+	// Atomic: debit wallet in one DB transaction with row-level lock
+	newBalance, err := s.walletRepo.PayTx(ctx, wallet.ID, in.Amount)
+	if err != nil {
+		return nil, err
 	}
 
 	tx := &domain.Transaction{
@@ -265,7 +228,7 @@ func (s *WalletService) Pay(ctx context.Context, in PayInput) (*WalletResult, er
 		Description:   in.Description,
 		Category:      in.Category,
 		IsNFC:         in.IsNFC,
-		BalanceBefore: &wallet.Balance,
+		BalanceBefore: &balanceBefore,
 		BalanceAfter:  &newBalance,
 	}
 
@@ -280,7 +243,6 @@ func (s *WalletService) Pay(ctx context.Context, in PayInput) (*WalletResult, er
 	}
 
 	if err := s.txRepo.Create(ctx, tx); err != nil {
-		_ = s.walletRepo.UpdateBalance(ctx, wallet.ID, wallet.Balance) // rollback
 		return nil, fmt.Errorf("record payment transaction: %w", err)
 	}
 
