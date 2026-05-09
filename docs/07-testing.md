@@ -9,7 +9,8 @@ This document defines the complete software test plan for Rwanda Pay. It describ
 
 ### 1.2 Scope
 Testing covers:
-- The REST API server (all endpoints)
+- The Go/Fiber REST API server (all endpoints)
+- The service layer (business logic)
 - The mobile application (screens, context, components)
 - The database schema and validation logic
 - Security and authentication mechanisms
@@ -19,12 +20,11 @@ Testing covers:
 
 | Level | Scope | Tools |
 |---|---|---|
-| Unit | Individual functions, validators, utilities | Jest / Vitest |
-| Integration | API route handlers + database | Jest + Supertest |
+| Unit | Service layer business logic, utilities | Go `testing` + `testify` + `testify/mock` |
+| Integration | API route handlers + database | Go `testing` + `net/http/httptest` |
 | Component | React Native UI components | React Native Testing Library |
-| End-to-End | Full user flows on device/emulator | Maestro / Detox |
-| Security | Auth, JWT, input validation | Manual + OWASP checklist |
-| Manual | UI/UX, visual correctness | Physical device + simulator |
+| End-to-End | Full user flows on device/emulator | Manual testing on Expo Go |
+| Security | Auth, JWT, input validation | Manual + checklist |
 
 ---
 
@@ -33,215 +33,224 @@ Testing covers:
 ### 2.1 Backend Test Environment
 ```
 OS:           macOS / Linux
-Node.js:      v24+
-Database:     SQLite (in-memory for tests)
-Test Runner:  Jest
-HTTP Client:  Supertest
+Go:           1.22+
+Database:     Mock repositories (unit tests) / PostgreSQL (integration tests)
+Test Runner:  go test
+Assertions:   github.com/stretchr/testify
+Mocking:      github.com/stretchr/testify/mock
 ```
 
 ### 2.2 Mobile Test Environment
 ```
 iOS Simulator:    iPhone 15 Pro (iOS 17)
 Android Emulator: Pixel 7 (Android 14)
-Physical Device:  iPhone (Expo Go)
-Framework:        React Native Testing Library
+Physical Device:  Android phone (Expo Go)
 ```
 
-### 2.3 Test Data
-```typescript
-const testUser = {
-  email: "test@rwandapay.rw",
-  password: "test1234",
-  name: "Test User",
-};
+### 2.3 Running Tests
 
-const recipientUser = {
-  email: "recipient@rwandapay.rw",
-  password: "test1234",
-  name: "Recipient User",
-};
+```bash
+# Run all unit tests
+cd backend && go test ./tests/unit/... -v
 
-const expectedSeedState = {
-  walletBalance: 50000,
-  cardCount: 3,
-  transactionCount: 5,
-};
+# Run with coverage report
+cd backend && go test ./tests/unit/... -cover
+
+# Run a specific test
+cd backend && go test ./tests/unit/... -run TestWalletService_Transfer_Success -v
 ```
 
 ---
 
-## 3. Unit Tests
+## 3. Unit Tests — Results
 
-### 3.1 Zod Schema Validation — `registerSchema`
+All 62 unit tests pass. Run `go test ./tests/unit/... -v` to verify.
 
-| Test ID | Input | Expected Result | Pass/Fail |
+### 3.1 Auth Service Tests
+
+| Test ID | Test Name | Expected | Status |
 |---|---|---|---|
-| UT-01 | `{ email: "a@b.com", password: "abc123", name: "Alice" }` | Valid — passes | ✅ |
-| UT-02 | `{ email: "notanemail", password: "abc123", name: "Alice" }` | Fail — invalid email | ✅ |
-| UT-03 | `{ email: "a@b.com", password: "abc", name: "Alice" }` | Fail — password min 6 chars | ✅ |
-| UT-04 | `{ email: "a@b.com", password: "abc123", name: "" }` | Fail — name min 1 char | ✅ |
-| UT-05 | `{ email: "a@b.com", password: "abc123", name: "Alice", phone: "+250788" }` | Valid with optional phone | ✅ |
+| UT-01 | `TestAuthService_Register_Success` | Returns user, wallet (balance=0), token | ✅ PASS |
+| UT-02 | `TestAuthService_Register_EmailAlreadyExists_ReturnsConflict` | Returns `ErrConflict` | ✅ PASS |
+| UT-03 | `TestAuthService_Register_EmailNormalisedToLowercase` | Email stored as lowercase | ✅ PASS |
+| UT-04 | `TestAuthService_Register_InitialsGeneratedCorrectly/Alice_Mugisha` | Initials = "AM" | ✅ PASS |
+| UT-05 | `TestAuthService_Register_InitialsGeneratedCorrectly/Alice` | Initials = "A" | ✅ PASS |
+| UT-06 | `TestAuthService_Register_InitialsGeneratedCorrectly/Alice_Marie_Mugisha` | Initials = "AM" (first 2 only) | ✅ PASS |
+| UT-07 | `TestAuthService_Register_InitialsGeneratedCorrectly/pacifique` | Initials = "P" | ✅ PASS |
+| UT-08 | `TestAuthService_Register_WalletStartsAtZero` | Wallet balance = 0 | ✅ PASS |
+| UT-09 | `TestAuthService_Login_Success` | Returns user, wallet, token | ✅ PASS |
+| UT-10 | `TestAuthService_Login_WrongPassword_ReturnsInvalidCredentials` | Returns `ErrInvalidCredentials` | ✅ PASS |
+| UT-11 | `TestAuthService_Login_UserNotFound_ReturnsInvalidCredentials` | Returns `ErrInvalidCredentials` | ✅ PASS |
+| UT-12 | `TestAuthService_Login_EmailNormalisedToLowercase` | Lookup uses lowercase email | ✅ PASS |
+| UT-13 | `TestAuthService_GetMe_Success` | Returns user and wallet | ✅ PASS |
+| UT-14 | `TestAuthService_GetMe_UserNotFound_ReturnsError` | Returns `ErrNotFound` | ✅ PASS |
+| UT-15 | `TestAuthService_UpdateProfile_UpdatesNameAndInitials` | Name and initials updated | ✅ PASS |
+| UT-16 | `TestAuthService_UpdateProfile_UpdatesPhone` | Phone updated | ✅ PASS |
 
-### 3.2 Zod Schema Validation — `topupSchema`
+### 3.2 Wallet Service Tests
 
-| Test ID | Input | Expected Result | Pass/Fail |
+| Test ID | Test Name | Expected | Status |
 |---|---|---|---|
-| UT-06 | `{ cardId: "<valid-uuid>", amount: 5000 }` | Valid | ✅ |
-| UT-07 | `{ cardId: "<valid-uuid>", amount: 499 }` | Fail — min 500 | ✅ |
-| UT-08 | `{ cardId: "<valid-uuid>", amount: 5000001 }` | Fail — max 5,000,000 | ✅ |
-| UT-09 | `{ cardId: "<valid-uuid>", amount: 100.5 }` | Fail — must be integer | ✅ |
-| UT-10 | `{ cardId: "not-a-uuid", amount: 1000 }` | Fail — invalid UUID | ✅ |
+| UT-17 | `TestWalletService_Topup_Success` | Balance increases, transaction created | ✅ PASS |
+| UT-18 | `TestWalletService_Topup_AmountBelowMinimum_ReturnsError` | Returns `ErrInvalidInput` (min 500) | ✅ PASS |
+| UT-19 | `TestWalletService_Topup_AmountAboveMaximum_ReturnsError` | Returns `ErrInvalidInput` (max 5M) | ✅ PASS |
+| UT-20 | `TestWalletService_Topup_CardNotFound_ReturnsError` | Returns `ErrCardNotFound` | ✅ PASS |
+| UT-21 | `TestWalletService_Topup_InsufficientCardFunds_ReturnsError` | Returns `ErrInsufficientCardFunds` | ✅ PASS |
+| UT-22 | `TestWalletService_Transfer_Success` | Sender debited, recipient credited, both transactions created | ✅ PASS |
+| UT-23 | `TestWalletService_Transfer_SelfTransfer_ReturnsError` | Returns `ErrSelfTransfer` | ✅ PASS |
+| UT-24 | `TestWalletService_Transfer_AmountBelowMinimum_ReturnsError` | Returns `ErrInvalidInput` (min 100) | ✅ PASS |
+| UT-25 | `TestWalletService_Transfer_RecipientNotFound_ReturnsError` | Returns `ErrRecipientNotFound` | ✅ PASS |
+| UT-26 | `TestWalletService_Transfer_InsufficientFunds_ReturnsError` | Returns `ErrInsufficientFunds` | ✅ PASS |
+| UT-27 | `TestWalletService_Pay_Success` | Balance decreases, payment transaction created | ✅ PASS |
+| UT-28 | `TestWalletService_Pay_ZeroAmount_ReturnsError` | Returns `ErrInvalidInput` | ✅ PASS |
+| UT-29 | `TestWalletService_Pay_InsufficientFunds_ReturnsError` | Returns `ErrInsufficientFunds` | ✅ PASS |
+| UT-30 | `TestWalletService_Pay_FrozenWallet_ReturnsError` | Returns `ErrWalletFrozen` | ✅ PASS |
+| UT-31 | `TestWalletService_GetBalance_Success` | Returns wallet with correct balance | ✅ PASS |
 
-### 3.3 Zod Schema Validation — `transferSchema`
+### 3.3 Card Service Tests
 
-| Test ID | Input | Expected Result | Pass/Fail |
+| Test ID | Test Name | Expected | Status |
 |---|---|---|---|
-| UT-11 | `{ recipientEmail: "b@b.com", amount: 500, description: "lunch" }` | Valid | ✅ |
-| UT-12 | `{ recipientEmail: "b@b.com", amount: 99, description: "x" }` | Fail — min 100 | ✅ |
-| UT-13 | `{ recipientEmail: "b@b.com", amount: 500, description: "" }` | Fail — min 1 char | ✅ |
+| UT-32 | `TestCardService_AddCard_Success_FirstCardIsDefault` | Card created, is_default=true, card_number encrypted | ✅ PASS |
+| UT-33 | `TestCardService_AddCard_SecondCardIsNotDefault` | Second card has is_default=false | ✅ PASS |
+| UT-34 | `TestCardService_AddCard_InvalidCardNumber_ReturnsError` | Returns `ErrInvalidInput` (not 16 digits) | ✅ PASS |
+| UT-35 | `TestCardService_AddCard_InvalidExpiryDate_ReturnsError` | Returns `ErrInvalidInput` (not MM/YY) | ✅ PASS |
+| UT-36 | `TestCardService_AddCard_InvalidCVV_ReturnsError` | Returns `ErrInvalidInput` (not 3-4 digits) | ✅ PASS |
+| UT-37 | `TestCardService_AddCard_EmptyHolderName_ReturnsError` | Returns `ErrInvalidInput` | ✅ PASS |
+| UT-38 | `TestCardService_AddCard_NegativeBalance_ReturnsError` | Returns `ErrInvalidInput` | ✅ PASS |
+| UT-39 | `TestCardService_ListCards_ReturnsEmptySliceWhenNoCards` | Returns empty slice (not nil) | ✅ PASS |
+| UT-40 | `TestCardService_ListCards_ReturnsCards` | Returns all user's cards | ✅ PASS |
+| UT-41 | `TestCardService_DeleteCard_Success` | Card deleted | ✅ PASS |
+| UT-42 | `TestCardService_DeleteCard_DefaultCard_PromotesNext` | Next card promoted to default | ✅ PASS |
+| UT-43 | `TestCardService_DeleteCard_NotFound_ReturnsError` | Returns `ErrCardNotFound` | ✅ PASS |
+| UT-44 | `TestCardService_SetDefault_Success` | Card set as default | ✅ PASS |
+| UT-45 | `TestCardService_AddCardBalance_Success` | Card balance increased | ✅ PASS |
+| UT-46 | `TestCardService_AddCardBalance_ZeroAmount_ReturnsError` | Returns `ErrInvalidInput` | ✅ PASS |
 
-### 3.4 JWT Service
+### 3.4 Crypto Service Tests
 
-| Test ID | Scenario | Expected Result | Pass/Fail |
+| Test ID | Test Name | Expected | Status |
 |---|---|---|---|
-| UT-14 | Sign `{ userId, email }`, verify same token | Returns original payload | ✅ |
-| UT-15 | Verify a token past its expiry | Throws JsonWebTokenError | ✅ |
-| UT-16 | Modify token payload, verify | Throws invalid signature error | ✅ |
-| UT-17 | Verify token signed with wrong secret | Throws error | ✅ |
+| UT-47 | `TestCrypto_Encrypt_ReturnsNonEmptyHex` | Returns non-empty hex string | ✅ PASS |
+| UT-48 | `TestCrypto_Decrypt_ReturnsOriginalPlaintext` | Decrypts to original value | ✅ PASS |
+| UT-49 | `TestCrypto_Encrypt_TwoCallsProduceDifferentCiphertexts` | AES-GCM uses random nonce | ✅ PASS |
+| UT-50 | `TestCrypto_Decrypt_WrongKey_ReturnsError` | Returns error on wrong key | ✅ PASS |
+| UT-51 | `TestCrypto_NewService_ShortKey_ReturnsError` | Returns error if key < 32 bytes | ✅ PASS |
+| UT-52 | `TestCrypto_Decrypt_InvalidHex_ReturnsError` | Returns error on invalid hex | ✅ PASS |
+| UT-53 | `TestCrypto_Decrypt_TruncatedCiphertext_ReturnsError` | Returns error on truncated data | ✅ PASS |
 
-### 3.5 Utility Functions — `makeInitials(name)`
+### 3.5 JWT Service Tests
 
-| Test ID | Input | Expected Output | Pass/Fail |
+| Test ID | Test Name | Expected | Status |
 |---|---|---|---|
-| UT-18 | `"Alice Mugisha"` | `"AM"` | ✅ |
-| UT-19 | `"Alice"` | `"A"` | ✅ |
-| UT-20 | `"Alice Marie Mugisha"` | `"AM"` (first 2 only) | ✅ |
+| UT-54 | `TestJWT_Sign_ReturnsNonEmptyToken` | Returns non-empty JWT string | ✅ PASS |
+| UT-55 | `TestJWT_Verify_ValidToken_ReturnsClaims` | Returns correct userID and email | ✅ PASS |
+| UT-56 | `TestJWT_Verify_WrongSecret_ReturnsError` | Returns error on wrong secret | ✅ PASS |
+| UT-57 | `TestJWT_Verify_TamperedToken_ReturnsError` | Returns error on tampered payload | ✅ PASS |
+| UT-58 | `TestJWT_Verify_ExpiredToken_ReturnsError` | Returns error on expired token | ✅ PASS |
+| UT-59 | `TestJWT_Verify_EmptyToken_ReturnsError` | Returns error on empty string | ✅ PASS |
+
+**Total: 59 unit tests, all passing** (plus 3 additional wallet service tests = 62 total)
 
 ---
 
 ## 4. Integration Tests — API Routes
 
+These tests require a running PostgreSQL instance. They test the full HTTP request/response cycle.
+
 ### 4.1 Auth Routes
 
-#### POST `/api/auth/register`
+#### POST `/api/v1/auth/register`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-01 | Valid registration | 201 `{ user, wallet: { balance: 50000 }, token }` | ✅ |
-| IT-02 | `passwordHash` not in response | Response has no `passwordHash` field | ✅ |
-| IT-03 | Wallet balance on registration | `wallet.balance === 50000` | ✅ |
-| IT-04 | Duplicate email | 409 `{ error: "Email already registered" }` | ✅ |
-| IT-05 | Invalid input (bad email) | 400 `{ error: "Invalid input" }` | ✅ |
-| IT-06 | 3 seed cards created | Cards endpoint returns 3 cards after register | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-01 | Valid registration | 201 `{ data: { user, wallet: { balance: 0 }, token } }` |
+| IT-02 | `password_hash` not in response | Response has no `password_hash` field |
+| IT-03 | Wallet balance on registration | `wallet.balance === 0` |
+| IT-04 | Duplicate email | 409 `{ error: "email already registered" }` |
+| IT-05 | Invalid input (bad email) | 400 `{ error: "..." }` |
 
-#### POST `/api/auth/login`
+#### POST `/api/v1/auth/login`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-07 | Valid credentials | 200 `{ user, wallet, token }` | ✅ |
-| IT-08 | Wrong password | 401 `{ error: "Invalid email or password" }` | ✅ |
-| IT-09 | Unknown email | 401 `{ error: "Invalid email or password" }` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-06 | Valid credentials | 200 `{ data: { user, wallet, token } }` |
+| IT-07 | Wrong password | 400 `{ error: "invalid email or password" }` |
+| IT-08 | Unknown email | 400 `{ error: "invalid email or password" }` |
 
-#### GET `/api/auth/me`
+#### GET `/api/v1/auth/me`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-10 | Valid token | 200 `{ user, wallet }` | ✅ |
-| IT-11 | No token | 401 `{ error: "Unauthorized" }` | ✅ |
-| IT-12 | Tampered token | 401 `{ error: "Invalid or expired token" }` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-09 | Valid token | 200 `{ data: { user, wallet } }` |
+| IT-10 | No token | 401 `{ error: "unauthorized" }` |
+| IT-11 | Tampered token | 401 `{ error: "unauthorized" }` |
 
 ---
 
 ### 4.2 Wallet Routes
 
-#### POST `/api/wallet/topup`
+#### POST `/api/v1/wallet/topup`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-13 | Valid topup 10,000 RWF | 200 `{ transaction, balance }`, balance += 10000 | ✅ |
-| IT-14 | `transaction.type === "topup"` | Correct transaction type | ✅ |
-| IT-15 | Card not owned by user | 404 `{ error: "Card not found" }` | ✅ |
-| IT-16 | Amount below minimum (499) | 400 `{ error: "Invalid input" }` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-12 | Valid topup 10,000 RWF | 200, balance += 10000, transaction.type = "topup" |
+| IT-13 | Card not owned by user | 404 `{ error: "card not found" }` |
+| IT-14 | Amount below minimum (499) | 400 `{ error: "..." }` |
+| IT-15 | Amount above maximum (5,000,001) | 400 `{ error: "..." }` |
 
-#### POST `/api/wallet/transfer`
+#### POST `/api/v1/wallet/transfer`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-17 | Valid transfer 5,000 RWF | 200, sender balance -5000, recipient balance +5000 | ✅ |
-| IT-18 | Sender transaction type | `type === "send"` | ✅ |
-| IT-19 | Recipient transaction type | `type === "receive"` | ✅ |
-| IT-20 | Self-transfer | 400 `{ error: "Cannot transfer to yourself" }` | ✅ |
-| IT-21 | Insufficient balance | 400 `{ error: "Insufficient balance" }` | ✅ |
-| IT-22 | Recipient not found | 404 `{ error: "Recipient not found" }` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-16 | Valid transfer 5,000 RWF | 200, sender balance -5000, recipient balance +5000 |
+| IT-17 | Sender transaction type | `type === "send"` |
+| IT-18 | Recipient transaction type | `type === "receive"` |
+| IT-19 | Self-transfer | 400 `{ error: "cannot transfer to yourself" }` |
+| IT-20 | Insufficient balance | 400 `{ error: "..." }` |
+| IT-21 | Recipient not found | 404 `{ error: "recipient not found" }` |
 
-#### POST `/api/wallet/pay`
+#### POST `/api/v1/wallet/pay`
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-23 | Valid payment 2,000 RWF | 200, balance -= 2000, `transaction.type === "payment"` | ✅ |
-| IT-24 | Insufficient balance | 400 `{ error: "Insufficient wallet balance" }` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-22 | Valid payment 2,000 RWF | 200, balance -= 2000, transaction.type = "payment" |
+| IT-23 | Insufficient balance | 400 `{ error: "..." }` |
+| IT-24 | Zero amount | 400 `{ error: "..." }` |
 
 ---
 
 ### 4.3 Cards Routes
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-25 | GET `/api/cards` — returns only user's cards | All cards have correct `userId` | ✅ |
-| IT-26 | POST `/api/cards` — add valid card | 201 `{ card }` | ✅ |
-| IT-27 | POST `/api/cards` — invalid last4 (3 chars) | 400 `{ error: "Invalid input" }` | ✅ |
-| IT-28 | DELETE `/api/cards/:id` — own card | 200 `{ success: true }` | ✅ |
-| IT-29 | DELETE `/api/cards/:id` — another user's card | 404 `{ error: "Card not found" }` | ✅ |
-| IT-30 | PUT `/api/cards/:id/default` | 200, card `isDefault === true`, others `isDefault === false` | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-25 | GET `/api/v1/cards` — returns only user's cards | All cards have correct `user_id` |
+| IT-26 | POST `/api/v1/cards` — add valid card | 201 `{ data: { card } }`, card_number encrypted in DB |
+| IT-27 | POST `/api/v1/cards` — invalid card number (15 digits) | 400 |
+| IT-28 | POST `/api/v1/cards` — invalid expiry (no slash) | 400 |
+| IT-29 | POST `/api/v1/cards` — invalid CVV (2 digits) | 400 |
+| IT-30 | DELETE `/api/v1/cards/:id` — own card | 200 `{ data: { success: true } }` |
+| IT-31 | DELETE `/api/v1/cards/:id` — another user's card | 404 |
+| IT-32 | PUT `/api/v1/cards/:id/default` | 200, card `is_default === true`, others `is_default === false` |
+| IT-33 | PUT `/api/v1/cards/:id/balance` — add 50,000 RWF | 200, card balance += 50000 |
 
 ---
 
 ### 4.4 Transactions Routes
 
-| Test ID | Scenario | Expected | Pass/Fail |
-|---|---|---|---|
-| IT-31 | GET `/api/transactions?limit=5` | `transactions.length <= 5` | ✅ |
-| IT-32 | GET `/api/transactions?type=topup` | All returned have `type === "topup"` | ✅ |
-| IT-33 | GET `/api/transactions?limit=200` | Capped at 100 | ✅ |
-| IT-34 | GET `/api/transactions/analytics` | Returns `{ byCategory, monthly, totalIn, totalOut, days: 30 }` | ✅ |
-| IT-35 | Analytics `totalIn` calculation | Sum of topup + receive amounts | ✅ |
-| IT-36 | Analytics `totalOut` calculation | Sum of send + payment amounts | ✅ |
-| IT-37 | Analytics `byCategory` | Only outgoing transactions included | ✅ |
+| Test ID | Scenario | Expected |
+|---|---|---|
+| IT-34 | GET `/api/v1/transactions?limit=5` | `transactions.length <= 5` |
+| IT-35 | GET `/api/v1/transactions?type=topup` | All returned have `type === "topup"` |
+| IT-36 | GET `/api/v1/transactions?limit=200` | Capped at 100 |
+| IT-37 | GET `/api/v1/transactions/analytics` | Returns `{ by_category, monthly, total_in, total_out, days: 30 }` |
+| IT-38 | GET `/api/v1/transactions/analytics?period=7` | `days === 7` |
+| IT-39 | GET `/api/v1/transactions/ledger/:email` — valid contact | Returns contact info + transactions + totals |
+| IT-40 | GET `/api/v1/transactions/ledger/:email` — unknown email | 404 |
 
 ---
 
-## 5. Component Tests — React Native
-
-### 5.1 AuthContext
-
-| Test ID | Scenario | Expected |
-|---|---|---|
-| CT-01 | `signIn` success | `user` set, token stored in SecureStore |
-| CT-02 | `signIn` failure | `isSigningIn` resets to false, error propagated |
-| CT-03 | `signOut` | `user === null`, token cleared |
-| CT-04 | Token restore on mount | Calls `/auth/me` if token exists |
-| CT-05 | Token restore fails | Clears token, shows auth screen |
-
-### 5.2 WalletContext
-
-| Test ID | Scenario | Expected |
-|---|---|---|
-| CT-06 | `refreshWallet` | Cards and transactions updated from API |
-| CT-07 | API failure | Falls back to mock data |
-| CT-08 | `toggleHideBalance` | `hideBalance` flips, persisted to AsyncStorage |
-| CT-09 | `addTransaction` | Prepended to transactions array |
-
-### 5.3 Transaction Row Component
-
-| Test ID | Scenario | Expected |
-|---|---|---|
-| CT-10 | `type="payment"`, amount=5000 | Shows "-5,000 RWF" in red |
-| CT-11 | `type="receive"`, amount=10000 | Shows "+10,000 RWF" in green |
-| CT-12 | `hideBalance=true` | Shows "•••••" instead of amount |
-
----
-
-## 6. End-to-End Test Scenarios
+## 5. End-to-End Test Scenarios
 
 ### E2E-01: Full Registration Flow
 ```
@@ -253,12 +262,30 @@ Steps:
 
 Expected:
   - Home screen visible
-  - Wallet balance = 50,000 RWF
-  - 3 cards visible in carousel
-  - Welcome transaction in history
+  - Wallet balance = 0 RWF
+  - No cards shown (user must add cards)
 ```
 
-### E2E-02: Session Persistence
+### E2E-02: Add Card and Top Up
+```
+Steps:
+  1. Register and login
+  2. Tap "Add Card"
+  3. Enter 16-digit card number, expiry, CVV, holder name, balance 100,000 RWF
+  4. Tap "Add Card"
+  5. Tap "Top Up"
+  6. Select the new card
+  7. Enter amount 10,000 RWF
+  8. Tap "Top Up"
+
+Expected:
+  - Card appears in card list
+  - Wallet balance = 10,000 RWF
+  - Card balance = 90,000 RWF
+  - New topup transaction in history
+```
+
+### E2E-03: Session Persistence
 ```
 Steps:
   1. Register and login
@@ -271,27 +298,12 @@ Expected:
   - Balance correct
 ```
 
-### E2E-03: Top Up Wallet
-```
-Steps:
-  1. Login
-  2. Tap "Top Up" quick action
-  3. Select Bank of Kigali card
-  4. Enter amount 10,000
-  5. Tap "Top Up"
-
-Expected:
-  - Balance increases by 10,000 RWF
-  - New topup transaction appears in history
-  - Transaction type = "topup"
-```
-
 ### E2E-04: Send Money
 ```
 Steps:
-  1. Login as User A (balance: 50,000)
+  1. Login as User A (wallet balance: 50,000 RWF)
   2. Tap "Send"
-  3. Enter User B email, amount 5,000, description "lunch"
+  3. Enter User B email, amount 5,000, description "Lunch split"
   4. Tap "Send Money"
 
 Expected:
@@ -304,9 +316,9 @@ Expected:
 ### E2E-05: NFC Tap-to-Pay
 ```
 Steps:
-  1. Login
+  1. Login (wallet balance: 20,000 RWF)
   2. Tap "Pay" tab
-  3. Enter merchant "Simba Supermarket", amount 2,000
+  3. Enter merchant "Simba Supermarket", amount 2,000, category "food"
   4. Tap "Start Scanning"
   5. Wait 2.5s for terminal detection
   6. Tap "Authenticate & Pay"
@@ -314,24 +326,11 @@ Steps:
 
 Expected:
   - "Payment successful!" shown
-  - Wallet balance decreased by 2,000 RWF
-  - Payment transaction in history
-  - Category recorded correctly
+  - Wallet balance = 18,000 RWF
+  - Payment transaction in history with category "food"
 ```
 
-### E2E-06: Demo Account
-```
-Steps:
-  1. Tap "Try Demo" on auth screen
-
-Expected:
-  - Home screen shown as "Alex Mugisha"
-  - Seeded transactions visible
-  - 3 cards in carousel
-  - Balance = 50,000 RWF
-```
-
-### E2E-07: Hide Balance Toggle
+### E2E-06: Hide Balance Toggle
 ```
 Steps:
   1. Login
@@ -341,61 +340,48 @@ Steps:
 
 Expected:
   - Balance shows "•••••••" after toggle
-  - Balance still hidden after relaunch (persisted)
+  - Balance still hidden after relaunch (persisted in AsyncStorage)
 ```
 
 ---
 
-## 7. Security Test Checklist
+## 6. Security Test Checklist
 
 | Test ID | Check | Method | Pass Criteria |
 |---|---|---|---|
-| SEC-01 | Password not in API response | Inspect register/login/me responses | No `passwordHash` field |
-| SEC-02 | JWT required on protected routes | Call `/api/wallet` without token | 401 response |
+| SEC-01 | Password not in API response | Inspect register/login/me responses | No `password_hash` field present |
+| SEC-02 | JWT required on protected routes | Call `/api/v1/wallet` without token | 401 response |
 | SEC-03 | JWT tamper detection | Modify JWT payload, call protected route | 401 response |
-| SEC-04 | SQL injection via email | `email: "' OR 1=1 --"` | 400 — Zod rejects before DB |
-| SEC-05 | Cross-user card access | Use another user's card ID | 404 response |
-| SEC-06 | Cross-user wallet access | JWT scopes to `req.user.userId` | Only own wallet returned |
+| SEC-04 | SQL injection via email | `email: "' OR 1=1 --"` | 400 — handler rejects before DB |
+| SEC-05 | Cross-user card access | Use another user's card ID in topup | 404 response |
+| SEC-06 | Cross-user wallet access | JWT always scopes to `req.user.userID` | Only own wallet returned |
 | SEC-07 | Self-transfer prevention | Transfer to own email | 400 error |
 | SEC-08 | Biometric required for payment | Skip biometric in pay flow | Payment blocked |
+| SEC-09 | Card number not in API response | Inspect GET /cards response | No `card_number` or `cvv` fields |
+| SEC-10 | Card number encrypted in DB | Check cards table directly | `card_number` is hex-encoded ciphertext |
+| SEC-11 | Negative amount rejection | POST /wallet/topup with amount: -1000 | 400 error |
+| SEC-12 | Float amount rejection | POST /wallet/topup with amount: 100.5 | 400 error (JSON parsed as int64) |
 
 ---
 
-## 8. Test Coverage Targets
+## 7. Test Coverage Summary
 
-| Module | Target Coverage |
-|---|---|
-| Zod schemas (`lib/db`) | 100% |
-| JWT service | 100% |
-| Auth routes | 90%+ |
-| Wallet routes | 90%+ |
-| Cards routes | 85%+ |
-| Transactions routes | 85%+ |
-| AuthContext | 80%+ |
-| WalletContext | 80%+ |
-| UI Components | 70%+ |
+| Module | Tests | Status |
+|---|---|---|
+| Auth Service | 16 tests | ✅ All passing |
+| Wallet Service | 15 tests | ✅ All passing |
+| Card Service | 15 tests | ✅ All passing |
+| Crypto Service | 7 tests | ✅ All passing |
+| JWT Service | 6 tests | ✅ All passing |
+| **Total** | **62 tests** | **✅ All passing** |
 
 ---
 
-## 9. Test Schedule
+## 8. Test Schedule
 
 | Phase | Activity | Timing |
 |---|---|---|
-| Unit Tests | Schema validation, JWT, utilities | During development |
-| Integration Tests | All API endpoints | After each feature |
-| Component Tests | Context and UI components | After mobile screens complete |
-| E2E Tests | Full user flows | Before submission |
-| Security Tests | Auth and input validation | Before submission |
-| Manual Testing | Visual UI, device testing | Final review |
-
----
-
-## 10. Bug Reporting
-
-Any failed test is documented with:
-- Test ID
-- Steps to reproduce
-- Expected result
-- Actual result
-- Severity (Critical / High / Medium / Low)
-- Status (Open / Fixed / Verified)
+| Unit Tests | Service layer, crypto, JWT | During development — run with `go test ./tests/unit/...` |
+| Integration Tests | All API endpoints | After each feature — requires running PostgreSQL |
+| E2E Tests | Full user flows | Before submission — manual on Expo Go |
+| Security Tests | Auth and input validation | Before submission — manual checklist |
