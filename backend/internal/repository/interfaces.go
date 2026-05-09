@@ -13,6 +13,7 @@ type UserRepository interface {
 	Update(ctx context.Context, user *domain.User) error
 }
 
+// WalletRepository provides basic wallet data access.
 type WalletRepository interface {
 	Create(ctx context.Context, wallet *domain.Wallet) error
 	GetByUserID(ctx context.Context, userID string) (*domain.Wallet, error)
@@ -50,6 +51,7 @@ type TransactionRepository interface {
 	ListByUserID(ctx context.Context, userID string, limit, offset int, txType string) ([]*domain.Transaction, error)
 	CountByUserID(ctx context.Context, userID string, txType string) (int, error)
 	GetAnalytics(ctx context.Context, userID string, days int) (*Analytics, error)
+	GetLedger(ctx context.Context, userID, contactID string) (*Ledger, error)
 }
 
 // Analytics result from the DB
@@ -64,4 +66,13 @@ type MonthlyData struct {
 	Month string
 	In    int64
 	Out   int64
+}
+
+// Ledger holds the transaction history between two users
+type Ledger struct {
+	Contact       *domain.User
+	Transactions  []*domain.Transaction
+	TotalSent     int64
+	TotalReceived int64
+	Net           int64 // TotalReceived - TotalSent
 }
