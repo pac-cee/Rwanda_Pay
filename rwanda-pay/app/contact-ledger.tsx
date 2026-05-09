@@ -42,8 +42,8 @@ function formatFullDate(dateStr: string): string {
 interface LedgerData {
   contact: { id: string; name: string; email: string; initials: string };
   transactions: ApiTransaction[];
-  totalSent: number;
-  totalReceived: number;
+  total_sent: number;
+  total_received: number;
   net: number;
 }
 
