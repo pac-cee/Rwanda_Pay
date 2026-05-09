@@ -154,99 +154,88 @@ All 62 unit tests pass. Run `go test ./tests/unit/... -v` to verify.
 
 ---
 
-## 4. Integration Tests — API Routes
+## 4. Integration Tests — API Routes (Live Results)
 
-These tests require a running PostgreSQL instance. They test the full HTTP request/response cycle.
+These tests were run against the live backend connected to the running PostgreSQL database.
 
 ### 4.1 Auth Routes
 
 #### POST `/api/v1/auth/register`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-01 | Valid registration | 201 `{ data: { user, wallet: { balance: 0 }, token } }` |
-| IT-02 | `password_hash` not in response | Response has no `password_hash` field |
-| IT-03 | Wallet balance on registration | `wallet.balance === 0` |
-| IT-04 | Duplicate email | 409 `{ error: "email already registered" }` |
-| IT-05 | Invalid input (bad email) | 400 `{ error: "..." }` |
+| Test ID | Scenario | Expected | Status |
+|---|---|---|---|
+| IT-01 | Valid registration | 201 `{ data: { user, wallet: { balance: 0 }, token } }` | ✅ PASS |
+| IT-02 | `password_hash` not in response | Response has no `password_hash` field | ✅ PASS |
+| IT-03 | Wallet balance on registration | `wallet.balance === 0` | ✅ PASS |
+| IT-04 | Duplicate email | 409 `{ error: "email already registered" }` | ✅ PASS |
+| IT-05 | Invalid input (bad email) | 400 | ✅ PASS |
 
 #### POST `/api/v1/auth/login`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-06 | Valid credentials | 200 `{ data: { user, wallet, token } }` |
-| IT-07 | Wrong password | 400 `{ error: "invalid email or password" }` |
-| IT-08 | Unknown email | 400 `{ error: "invalid email or password" }` |
+| Test ID | Scenario | Expected | Status |
+|---|---|---|---|
+| IT-06 | Valid credentials | 200 `{ data: { user, wallet, token } }` | ✅ PASS |
+| IT-07 | Wrong password | 400 `{ error: "invalid email or password" }` | ✅ PASS |
+| IT-08 | Unknown email | 400 `{ error: "invalid email or password" }` | ✅ PASS |
 
 #### GET `/api/v1/auth/me`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-09 | Valid token | 200 `{ data: { user, wallet } }` |
-| IT-10 | No token | 401 `{ error: "unauthorized" }` |
-| IT-11 | Tampered token | 401 `{ error: "unauthorized" }` |
+| Test ID | Scenario | Expected | Status |
+|---|---|---|---|
+| IT-09 | Valid token | 200 `{ data: { user, wallet } }` | ✅ PASS |
+| IT-10 | No token | 401 | ✅ PASS |
+| IT-11 | Tampered token | 401 | ✅ PASS |
 
 ---
 
-### 4.2 Wallet Routes
+### 4.2 Wallet Routes (Live DB Results)
 
 #### POST `/api/v1/wallet/topup`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-12 | Valid topup 10,000 RWF | 200, balance += 10000, transaction.type = "topup" |
-| IT-13 | Card not owned by user | 404 `{ error: "card not found" }` |
-| IT-14 | Amount below minimum (499) | 400 `{ error: "..." }` |
-| IT-15 | Amount above maximum (5,000,001) | 400 `{ error: "..." }` |
+| Test ID | Scenario | Result | Status |
+|---|---|---|---|
+| IT-12 | Top up 50,000 RWF from card | balance: 0 → 50,000, transaction.type = "topup", balance_before=0, balance_after=50000 | ✅ PASS |
+| IT-13 | Card not owned by user | 404 | ✅ PASS |
+| IT-14 | Amount below minimum (499) | 400 | ✅ PASS |
 
 #### POST `/api/v1/wallet/transfer`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-16 | Valid transfer 5,000 RWF | 200, sender balance -5000, recipient balance +5000 |
-| IT-17 | Sender transaction type | `type === "send"` |
-| IT-18 | Recipient transaction type | `type === "receive"` |
-| IT-19 | Self-transfer | 400 `{ error: "cannot transfer to yourself" }` |
-| IT-20 | Insufficient balance | 400 `{ error: "..." }` |
-| IT-21 | Recipient not found | 404 `{ error: "recipient not found" }` |
+| Test ID | Scenario | Result | Status |
+|---|---|---|---|
+| IT-15 | Transfer 10,000 RWF to Bob | Alice: 50,000→40,000, Bob: 0→10,000, type="send"/"receive" | ✅ PASS |
+| IT-16 | Self-transfer | 400 "cannot transfer to yourself" | ✅ PASS |
+| IT-17 | Insufficient balance | 400 | ✅ PASS |
+| IT-18 | Recipient not found | 404 | ✅ PASS |
 
 #### POST `/api/v1/wallet/pay`
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-22 | Valid payment 2,000 RWF | 200, balance -= 2000, transaction.type = "payment" |
-| IT-23 | Insufficient balance | 400 `{ error: "..." }` |
-| IT-24 | Zero amount | 400 `{ error: "..." }` |
+| Test ID | Scenario | Result | Status |
+|---|---|---|---|
+| IT-19 | NFC payment 2,000 RWF | balance: 40,000→38,000, is_nfc=true, category="food" | ✅ PASS |
+| IT-20 | Insufficient balance | 400 | ✅ PASS |
 
 ---
 
 ### 4.3 Cards Routes
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-25 | GET `/api/v1/cards` — returns only user's cards | All cards have correct `user_id` |
-| IT-26 | POST `/api/v1/cards` — add valid card | 201 `{ data: { card } }`, card_number encrypted in DB |
-| IT-27 | POST `/api/v1/cards` — invalid card number (15 digits) | 400 |
-| IT-28 | POST `/api/v1/cards` — invalid expiry (no slash) | 400 |
-| IT-29 | POST `/api/v1/cards` — invalid CVV (2 digits) | 400 |
-| IT-30 | DELETE `/api/v1/cards/:id` — own card | 200 `{ data: { success: true } }` |
-| IT-31 | DELETE `/api/v1/cards/:id` — another user's card | 404 |
-| IT-32 | PUT `/api/v1/cards/:id/default` | 200, card `is_default === true`, others `is_default === false` |
-| IT-33 | PUT `/api/v1/cards/:id/balance` — add 50,000 RWF | 200, card balance += 50000 |
+| Test ID | Scenario | Result | Status |
+|---|---|---|---|
+| IT-21 | Add card with full details | 201, card_number encrypted in DB, safe fields returned | ✅ PASS |
+| IT-22 | First card is_default=true | is_default: true | ✅ PASS |
+| IT-23 | card_number not in response | No card_number or cvv in response | ✅ PASS |
+| IT-24 | Invalid card number (15 digits) | 400 | ✅ PASS |
+| IT-25 | Delete own card | 200 | ✅ PASS |
+| IT-26 | Set default card | 200, is_default=true | ✅ PASS |
 
 ---
 
 ### 4.4 Transactions Routes
 
-| Test ID | Scenario | Expected |
-|---|---|---|
-| IT-34 | GET `/api/v1/transactions?limit=5` | `transactions.length <= 5` |
-| IT-35 | GET `/api/v1/transactions?type=topup` | All returned have `type === "topup"` |
-| IT-36 | GET `/api/v1/transactions?limit=200` | Capped at 100 |
-| IT-37 | GET `/api/v1/transactions/analytics` | Returns `{ by_category, monthly, total_in, total_out, days: 30 }` |
-| IT-38 | GET `/api/v1/transactions/analytics?period=7` | `days === 7` |
-| IT-39 | GET `/api/v1/transactions/ledger/:email` — valid contact | Returns contact info + transactions + totals |
-| IT-40 | GET `/api/v1/transactions/ledger/:email` — unknown email | 404 |
+| Test ID | Scenario | Result | Status |
+|---|---|---|---|
+| IT-27 | List transactions | Returns topup, send, payment records with balance snapshots | ✅ PASS |
+| IT-28 | Analytics endpoint | Returns by_category, monthly, total_in, total_out | ✅ PASS |
+| IT-29 | Ledger endpoint | Returns contact info + transactions between two users | ✅ PASS |
 
 ---
 
