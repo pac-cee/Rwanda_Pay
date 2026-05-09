@@ -27,7 +27,7 @@ func main() {
 		log.Fatalf("connect to database: %v", err)
 	}
 	defer db.Close()
-	log.Println("connected to PostgreSQL")
+	log.Printf("connected to PostgreSQL (env=%s port=%s)", cfg.App.Env, cfg.App.Port)
 
 	// Packages
 	jwtSvc := jwt.NewService(cfg.JWT.Secret, cfg.JWT.ExpiryHours)
@@ -38,7 +38,7 @@ func main() {
 
 	// Repositories
 	userRepo := repository.NewUserRepository(db)
-	walletRepo := repository.NewWalletRepository(db)
+	walletRepo := repository.NewWalletRepository(db) // returns WalletTxRepository
 	cardRepo := repository.NewCardRepository(db)
 	merchantRepo := repository.NewMerchantRepository(db)
 	userMerchantRepo := repository.NewUserMerchantRepository(db)
@@ -48,7 +48,7 @@ func main() {
 	authSvc := service.NewAuthService(userRepo, walletRepo, jwtSvc)
 	walletSvc := service.NewWalletService(walletRepo, cardRepo, userRepo, merchantRepo, userMerchantRepo, txRepo)
 	cardSvc := service.NewCardService(cardRepo, cryptoSvc)
-	txSvc := service.NewTransactionService(txRepo)
+	txSvc := service.NewTransactionService(txRepo, userRepo)
 
 	// Handlers
 	handlers := router.Handlers{
@@ -66,7 +66,7 @@ func main() {
 
 	router.Setup(app, handlers, jwtSvc)
 
-	log.Printf("Rwanda Pay API starting on port %s", cfg.App.Port)
+	log.Printf("Rwanda Pay API starting on :%s", cfg.App.Port)
 	if err := app.Listen(":" + cfg.App.Port); err != nil {
 		log.Fatalf("server error: %v", err)
 	}
