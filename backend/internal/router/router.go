@@ -44,12 +44,12 @@ func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
 	// API v1
 	v1 := app.Group("/api/v1")
 
-	// Public routes
+	// ── Public routes ──────────────────────────────────────────────────────────
 	auth := v1.Group("/auth")
 	auth.Post("/register", h.Auth.Register)
 	auth.Post("/login", h.Auth.Login)
 
-	// Protected routes
+	// ── Protected routes ───────────────────────────────────────────────────────
 	protected := v1.Group("", middleware.Auth(jwtSvc))
 
 	// Auth
@@ -76,4 +76,8 @@ func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
 	transactions := protected.Group("/transactions")
 	transactions.Get("/", h.Transaction.List)
 	transactions.Get("/analytics", h.Transaction.Analytics)
+	transactions.Get("/ledger/:email", h.Transaction.Ledger)
+
+	// Merchants (read-only for users)
+	// Future: add merchant handler
 }
