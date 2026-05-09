@@ -194,7 +194,7 @@ export default function ContactLedgerScreen() {
                     </View>
                     <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>You sent</Text>
                     <Text style={[styles.statAmount, { color: colors.foreground }]}>
-                      {formatAmount(data.totalSent)}
+                      {formatAmount(data.total_sent)}
                     </Text>
                     <Text style={[styles.statCurrency, { color: colors.mutedForeground }]}>RWF</Text>
                   </View>
@@ -207,7 +207,7 @@ export default function ContactLedgerScreen() {
                     </View>
                     <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>You received</Text>
                     <Text style={[styles.statAmount, { color: colors.foreground }]}>
-                      {formatAmount(data.totalReceived)}
+                      {formatAmount(data.total_received)}
                     </Text>
                     <Text style={[styles.statCurrency, { color: colors.mutedForeground }]}>RWF</Text>
                   </View>
