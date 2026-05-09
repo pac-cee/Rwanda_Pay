@@ -40,7 +40,7 @@ func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) erro
 	return args.Error(0)
 }
 
-// ─── WalletRepository Mock ────────────────────────────────────────────────────
+// ─── WalletRepository Mock (basic) ───────────────────────────────────────────
 
 type MockWalletRepository struct {
 	mock.Mock
@@ -62,6 +62,27 @@ func (m *MockWalletRepository) GetByUserID(ctx context.Context, userID string) (
 func (m *MockWalletRepository) UpdateBalance(ctx context.Context, walletID string, newBalance int64) error {
 	args := m.Called(ctx, walletID, newBalance)
 	return args.Error(0)
+}
+
+// ─── WalletTxRepository Mock (with atomic transaction methods) ────────────────
+
+type MockWalletTxRepository struct {
+	MockWalletRepository
+}
+
+func (m *MockWalletTxRepository) TransferTx(ctx context.Context, senderWalletID, recipientWalletID string, amount int64) (int64, int64, error) {
+	args := m.Called(ctx, senderWalletID, recipientWalletID, amount)
+	return args.Get(0).(int64), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockWalletTxRepository) TopupTx(ctx context.Context, walletID, cardID string, amount int64) (int64, int64, error) {
+	args := m.Called(ctx, walletID, cardID, amount)
+	return args.Get(0).(int64), args.Get(1).(int64), args.Error(2)
+}
+
+func (m *MockWalletTxRepository) PayTx(ctx context.Context, walletID string, amount int64) (int64, error) {
+	args := m.Called(ctx, walletID, amount)
+	return args.Get(0).(int64), args.Error(1)
 }
 
 // ─── CardRepository Mock ──────────────────────────────────────────────────────
@@ -224,4 +245,12 @@ func (m *MockTransactionRepository) GetAnalytics(ctx context.Context, userID str
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*repository.Analytics), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetLedger(ctx context.Context, userID, contactID string) (*repository.Ledger, error) {
+	args := m.Called(ctx, userID, contactID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*repository.Ledger), args.Error(1)
 }
