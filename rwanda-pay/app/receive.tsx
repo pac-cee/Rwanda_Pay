@@ -1,6 +1,7 @@
+import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import {
   Platform,
   Pressable,
@@ -45,6 +46,7 @@ export default function ReceiveScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const [copied, setCopied] = useState(false);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -52,6 +54,14 @@ export default function ReceiveScreen() {
   const displayName = user?.name ?? "";
   const displayPhone = user?.phone ?? user?.email ?? "";
   const initials = user?.initials ?? "";
+
+  const handleCopy = async () => {
+    if (!user?.email) return;
+    await Clipboard.setStringAsync(user.email);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
     <ScrollView
