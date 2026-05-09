@@ -38,7 +38,7 @@ type AuthService struct {
 
 func NewAuthService(
 	userRepo repository.UserRepository,
-	walletRepo repository.WalletRepository,
+	walletRepo repository.WalletRepository, // accepts WalletTxRepository (satisfies WalletRepository)
 	jwtSvc *jwt.Service,
 ) *AuthService {
 	return &AuthService{userRepo: userRepo, walletRepo: walletRepo, jwtSvc: jwtSvc}
