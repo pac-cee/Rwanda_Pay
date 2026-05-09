@@ -108,11 +108,11 @@ export default function ReceiveScreen() {
             <Text style={[styles.idValue, { color: colors.foreground }]} numberOfLines={1}>{user?.email ?? ""}</Text>
           </View>
           <Pressable
-            style={({ pressed }) => [styles.copyBtn, { backgroundColor: colors.muted, opacity: pressed ? 0.7 : 1 }]}
-            onPress={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+            style={({ pressed }) => [styles.copyBtn, { backgroundColor: copied ? colors.primary : colors.muted, opacity: pressed ? 0.7 : 1 }]}
+            onPress={handleCopy}
           >
-            <Feather name="copy" size={16} color={colors.primary} />
-            <Text style={[styles.copyText, { color: colors.primary }]}>Copy</Text>
+            <Feather name={copied ? "check" : "copy"} size={16} color={copied ? "#FFF" : colors.primary} />
+            <Text style={[styles.copyText, { color: copied ? "#FFF" : colors.primary }]}>{copied ? "Copied!" : "Copy"}</Text>
           </Pressable>
         </View>
 
