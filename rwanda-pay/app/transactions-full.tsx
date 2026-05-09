@@ -152,7 +152,7 @@ export default function TransactionsFullScreen() {
           }
           const { tx, isLast } = item;
           const canViewLedger =
-            (tx.type === "sent" || tx.type === "send" || tx.type === "received" || tx.type === "receive") &&
+            (tx.type === "send" || tx.type === "receive") &&
             tx.recipientName;
           return (
             <View style={[styles.txWrap, { backgroundColor: colors.card }]}>
