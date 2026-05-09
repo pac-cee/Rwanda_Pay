@@ -16,17 +16,11 @@
 
 Rwanda is one of Africa's fastest-growing digital economies. The government's Vision 2050 and the National Bank of Rwanda (BNR) have both set ambitious targets for a cashless economy, with mobile money penetration exceeding 40% of the adult population. As of 2024, Rwanda has over 10 million active mobile subscribers, and smartphone adoption is accelerating rapidly among urban and semi-urban populations.
 
-Despite this digital momentum, a critical and embarrassing gap exists in Rwanda's mobile payments ecosystem:
+Despite this digital momentum, a critical gap exists in Rwanda's mobile payments ecosystem:
 
 > **Apple Pay and Google Pay — the two dominant global contactless payment platforms — do not operate in Rwanda.**
 
-These services are unavailable because they require:
-- Local banking partnerships and card network agreements (Visa/Mastercard Rwanda)
-- NFC payment terminal infrastructure certified for the local market
-- Regulatory approval and integration with the National Bank of Rwanda
-- App Store and Play Store regional payment support
-
-None of these conditions are currently met in Rwanda. As a result, Rwandan smartphone users — even those with the latest iPhones and Android devices — cannot use their phones to tap and pay at merchants.
+These services are unavailable because they require local banking partnerships, NFC terminal infrastructure certified for the local market, regulatory approval from the National Bank of Rwanda, and App Store/Play Store regional payment support. None of these conditions are currently met in Rwanda.
 
 ### The Current Reality for Rwandan Consumers
 
@@ -44,11 +38,11 @@ None of these methods provide the seamless, tap-and-go experience that consumers
 
 Rwanda Pay is a software solution designed to fill this gap. It provides:
 
-1. **A unified digital wallet** — one app that aggregates multiple bank cards and mobile money accounts into a single RWF balance
-2. **NFC-simulated tap-to-pay** — a smartphone-native payment experience with biometric authentication, simulating the Apple Pay / Google Pay UX
-3. **Email-based peer-to-peer transfers** — send money to anyone by email address, no account numbers needed
+1. **A unified digital wallet** — one app that aggregates multiple bank cards into a single RWF balance
+2. **NFC-simulated tap-to-pay** — a smartphone-native payment experience with biometric authentication
+3. **Email-based peer-to-peer transfers** — send money to anyone by email address
 4. **Real-time spending analytics** — category-based charts and monthly breakdowns
-5. **A modern, secure interface** — JWT authentication, bcrypt password hashing, Face ID / fingerprint payment authorization
+5. **A modern, secure interface** — JWT authentication, bcrypt password hashing, AES-256-GCM card encryption
 
 ### Stakeholders
 
@@ -65,8 +59,6 @@ Rwanda Pay is a software solution designed to fill this gap. It provides:
 
 ## ii. Functional Diagram — Internal Working of the System
 
-The Rwanda Pay system consists of three main layers: the mobile application, the API server, and the database. These communicate over HTTP REST.
-
 ```
 ╔══════════════════════════════════════════════════════════════════════╗
 ║                        RWANDA PAY SYSTEM                            ║
@@ -79,12 +71,11 @@ The Rwanda Pay system consists of three main layers: the mobile application, the
 ║  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │    ║
 ║  │  │  Auth Screen │  │  Home Screen │  │   Pay Screen     │  │    ║
 ║  │  │  Login/Reg   │  │  Balance +   │  │   NFC Simulate   │  │    ║
-║  │  │  Demo        │  │  Cards       │  │   Biometric Auth │  │    ║
-║  │  └──────────────┘  └──────────────┘  └──────────────────┘  │    ║
-║  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐  │    ║
-║  │  │  Send Money  │  │ Transactions │  │   Analytics      │  │    ║
+║  │  └──────────────┘  │  Cards       │  │   Biometric Auth │  │    ║
+║  │  ┌──────────────┐  └──────────────┘  └──────────────────┘  │    ║
+║  │  │  Send Money  │  ┌──────────────┐  ┌──────────────────┐  │    ║
+║  │  │  Top-Up      │  │ Transactions │  │   Analytics      │  │    ║
 ║  │  │  Receive     │  │  History     │  │   Charts         │  │    ║
-║  │  │  Top-Up      │  │  Filter      │  │   Categories     │  │    ║
 ║  │  └──────────────┘  └──────────────┘  └──────────────────┘  │    ║
 ║  │                                                              │    ║
 ║  │  State: AuthContext + WalletContext (React Context API)      │    ║
@@ -94,40 +85,48 @@ The Rwanda Pay system consists of three main layers: the mobile application, the
 ║                        ▼                                             ║
 ║  ┌─────────────────────────────────────────────────────────────┐    ║
 ║  │                     API SERVER                               │    ║
-║  │               (Node.js 24 / Express 5)                       │    ║
+║  │               (Go 1.22 / Fiber v2)                           │    ║
 ║  │                                                              │    ║
-║  │  Middleware: CORS → pino-http Logger → express.json          │    ║
+║  │  Middleware: Recover → Logger → CORS → Auth (JWT)            │    ║
 ║  │                                                              │    ║
 ║  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────┐  │    ║
 ║  │  │  /auth   │ │ /wallet  │ │  /cards  │ │ /transactions│  │    ║
 ║  │  │ register │ │ balance  │ │  list    │ │  list        │  │    ║
 ║  │  │ login    │ │ topup    │ │  add     │ │  analytics   │  │    ║
-║  │  │ me       │ │ transfer │ │  delete  │ │              │  │    ║
+║  │  │ me       │ │ transfer │ │  delete  │ │  ledger      │  │    ║
 ║  │  │ logout   │ │ pay      │ │  default │ │              │  │    ║
 ║  │  └──────────┘ └──────────┘ └──────────┘ └──────────────┘  │    ║
 ║  │                                                              │    ║
-║  │  Auth: JWT (jsonwebtoken) + bcryptjs                         │    ║
-║  │  Validation: Zod schemas                                     │    ║
-║  │  ORM: Drizzle ORM                                            │    ║
+║  │  Auth: JWT (golang-jwt/jwt/v5) + bcrypt                      │    ║
+║  │  Encryption: AES-256-GCM (card numbers + CVV)                │    ║
+║  │  Architecture: Handler → Service → Repository (Clean Arch)  │    ║
 ║  └─────────────────────┬───────────────────────────────────────┘    ║
-║                        │ Drizzle ORM queries                         ║
+║                        │ pgx/v5 (pgxpool)                            ║
 ║                        ▼                                             ║
 ║  ┌─────────────────────────────────────────────────────────────┐    ║
 ║  │                      DATABASE                                │    ║
-║  │           (SQLite — dev / PostgreSQL — prod)                 │    ║
+║  │                   (PostgreSQL 16)                            │    ║
 ║  │                                                              │    ║
 ║  │   users          wallets        cards        transactions    │    ║
 ║  │   ─────          ───────        ─────        ────────────    │    ║
-║  │   id             id             id           id              │    ║
+║  │   id (UUID)      id (UUID)      id (UUID)    id (UUID)       │    ║
 ║  │   email          user_id (FK)   user_id (FK) user_id (FK)   │    ║
-║  │   password_hash  balance        last4        type            │    ║
-║  │   name           created_at     card_type    amount          │    ║
-║  │   phone          updated_at     holder_name  description     │    ║
-║  │   initials                      card_name    status          │    ║
-║  │   created_at                    color        card_id (FK)    │    ║
-║  │   updated_at                    is_default   recipient_id    │    ║
-║  │                                 created_at   category        │    ║
-║  │                                              created_at      │    ║
+║  │   password_hash  balance        card_number* type            │    ║
+║  │   name           currency       cvv*         amount (BIGINT) │    ║
+║  │   phone          is_frozen      last4        description     │    ║
+║  │   initials       created_at     expiry_date  status          │    ║
+║  │   created_at     updated_at     holder_name  card_id (FK)    │    ║
+║  │   updated_at                    network      recipient_id    │    ║
+║  │                                 balance      balance_before  │    ║
+║  │                                 is_default   balance_after   │    ║
+║  │                                 status       created_at      │    ║
+║  │                                              (* = encrypted) │    ║
+║  │   merchants      user_merchants                              │    ║
+║  │   ─────────      ─────────────                              │    ║
+║  │   id (UUID)      user_id (FK)                               │    ║
+║  │   name           merchant_id (FK)                           │    ║
+║  │   category       total_spent                                │    ║
+║  │   merchant_code  visit_count                                │    ║
 ║  └─────────────────────────────────────────────────────────────┘    ║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
@@ -138,12 +137,13 @@ The Rwanda Pay system consists of three main layers: the mobile application, the
 2. **Context Layer** — Screen calls a method on `AuthContext` or `WalletContext`
 3. **API Client** — Context calls `lib/api.ts` which builds an HTTP request with the JWT Bearer token
 4. **Middleware** — API server receives request, logs it, parses JSON body
-5. **Auth Check** — `requireAuth` middleware verifies the JWT signature and expiry
-6. **Validation** — Route handler validates input with Zod schema
-7. **Business Logic** — Route handler executes the operation (balance check, DB update, etc.)
-8. **Database** — Drizzle ORM executes typed SQL queries against SQLite/PostgreSQL
-9. **Response** — JSON response flows back to the mobile app
-10. **State Update** — Context updates React state, screens re-render automatically
+5. **Auth Check** — `middleware.Auth` verifies the JWT signature and expiry, attaches `userID` to context
+6. **Handler** — Parses and validates the request body
+7. **Service** — Executes business logic (balance checks, validation rules)
+8. **Repository** — Executes typed SQL queries via pgx/v5 against PostgreSQL
+9. **Atomic Transaction** — For money operations, uses `BEGIN/SELECT FOR UPDATE/COMMIT` to prevent race conditions
+10. **Response** — JSON response flows back to the mobile app
+11. **State Update** — Context updates React state, screens re-render automatically
 
 ---
 
@@ -151,9 +151,7 @@ The Rwanda Pay system consists of three main layers: the mobile application, the
 
 ### Primary Problem Statement
 
-Rwanda's smartphone users cannot use their phones as payment devices. The two global leaders in mobile contactless payments — **Apple Pay** and **Google Pay** — do not operate in Rwanda. This is not a temporary gap; it is a structural absence caused by missing banking infrastructure, NFC terminal certification, and regulatory frameworks.
-
-The consequence is that millions of Rwandans carry smartphones capable of NFC payments but are forced to use cash, physical cards, or slow USSD-based mobile money systems for every transaction.
+Rwanda's smartphone users cannot use their phones as payment devices. The two global leaders in mobile contactless payments — **Apple Pay** and **Google Pay** — do not operate in Rwanda. This is a structural absence caused by missing banking infrastructure, NFC terminal certification, and regulatory frameworks.
 
 ### Problem Analysis
 
@@ -163,19 +161,17 @@ The consequence is that millions of Rwandans carry smartphones capable of NFC pa
 - Result: Rwandan users cannot tap their phone at any merchant terminal.
 
 **Problem 2: Fragmented Mobile Money**
-- MTN MoMo serves ~8 million users but requires dialing `*182#` and navigating 5+ USSD menu levels for a simple transfer.
+- MTN MoMo serves ~8 million users but requires dialing `*182#` and navigating 5+ USSD menu levels.
 - Airtel Money requires `*185#` with similar friction.
 - There is no single app that shows all balances and allows transfers across providers.
 
 **Problem 3: No Peer-to-Peer Transfer by Identity**
 - Sending money requires knowing the recipient's phone number or bank account number.
 - There is no system that allows sending money by email address or username.
-- This creates friction for everyday transfers (splitting bills, paying friends, etc.)
 
 **Problem 4: No Spending Visibility**
 - Mobile money users receive SMS confirmations but have no spending dashboard.
 - There is no way to see "how much did I spend on food this month?" without manually reviewing SMS history.
-- This prevents personal financial management.
 
 **Problem 5: Security Vulnerabilities**
 - Physical card payments expose the full card number to merchants.
@@ -184,15 +180,13 @@ The consequence is that millions of Rwandans carry smartphones capable of NFC pa
 
 ### Proposed Solution: Rwanda Pay
 
-Rwanda Pay addresses all five problems:
-
 | Problem | Rwanda Pay Solution |
 |---|---|
 | No tap-to-pay | NFC-simulated payment with biometric auth — same UX as Apple Pay |
-| Fragmented mobile money | Unified wallet aggregating Bank of Kigali, MTN MoMo, I&M Bank |
+| Fragmented mobile money | Unified wallet with card management |
 | No P2P by identity | Email-based transfers — send to any registered user by email |
 | No spending visibility | Real-time analytics with category breakdown and monthly charts |
-| Security vulnerabilities | JWT auth + bcrypt + Face ID/fingerprint for every payment |
+| Security vulnerabilities | JWT auth + bcrypt + AES-256-GCM + biometric for every payment |
 
 ---
 
@@ -202,11 +196,10 @@ Rwanda Pay addresses all five problems:
 
 | Actor | Description |
 |---|---|
-| Guest User | Unauthenticated user — can register, login, or try demo |
+| Guest User | Unauthenticated user — can register or login |
 | Authenticated User | Logged-in user with full access to all features |
-| Demo User | Special auto-created account for exploration without signup |
 | API Server | Backend system processing all requests |
-| Database | Persistent storage for all user data |
+| Database | PostgreSQL persistent storage |
 | Biometric Device | iOS Face ID or Android fingerprint sensor |
 
 ### Functional Requirements
@@ -217,73 +210,59 @@ Rwanda Pay addresses all five problems:
 | FR-02 | Auth | Users shall log in with email and password |
 | FR-03 | Auth | System shall issue a signed JWT token on successful login or registration |
 | FR-04 | Auth | JWT shall be stored securely using expo-secure-store (encrypted on-device) |
-| FR-05 | Auth | On app launch, system shall restore session from stored token via GET /auth/me |
+| FR-05 | Auth | On app launch, system shall restore session from stored token via GET /api/v1/auth/me |
 | FR-06 | Auth | Users shall log out, clearing the stored token and resetting app state |
-| FR-07 | Auth | A demo account shall be auto-created on first tap of the Demo button |
-| FR-08 | Auth | Users shall update their name and phone number via profile settings |
-| FR-09 | Wallet | Each user shall have exactly one wallet denominated in RWF |
-| FR-10 | Wallet | New users shall receive a 50,000 RWF welcome balance on registration |
-| FR-11 | Wallet | Users shall top up their wallet from a linked card (min 500 RWF, max 5,000,000 RWF) |
-| FR-12 | Wallet | Users shall transfer money to another registered user by email (min 100 RWF) |
-| FR-13 | Wallet | System shall prevent self-transfers |
-| FR-14 | Wallet | System shall reject transfers when sender has insufficient balance |
-| FR-15 | Wallet | Wallet balance shall be displayed on the home screen with a hide/show toggle |
-| FR-16 | Cards | Users shall have 3 seed cards created automatically on registration |
-| FR-17 | Cards | Users shall add new cards with last 4 digits, card type, holder name, card name, and color |
-| FR-18 | Cards | Users shall delete any of their linked cards |
-| FR-19 | Cards | Users shall set any card as the default payment card |
-| FR-20 | Cards | Cards shall be displayed in a horizontal swipeable carousel on the home screen |
-| FR-21 | Pay | Users shall initiate an NFC payment simulation from the Pay tab |
-| FR-22 | Pay | System shall simulate terminal scanning with a 2.5-second delay |
-| FR-23 | Pay | Users shall authenticate via Face ID or fingerprint before payment is processed |
-| FR-24 | Pay | Payment shall deduct the specified amount from the wallet balance |
-| FR-25 | Pay | Haptic feedback shall be provided at each stage of the payment flow |
-| FR-26 | Transactions | All wallet operations shall create a transaction record with type, amount, description, status, category |
-| FR-27 | Transactions | Transaction list shall support pagination (limit/offset) and type filtering |
-| FR-28 | Transactions | Transactions shall be grouped by date (Today, Yesterday, full date) |
-| FR-29 | Transactions | Transaction categories: food, transport, shopping, entertainment, health, other |
-| FR-30 | Analytics | Users shall view spending analytics for the past 7 or 30 days |
-| FR-31 | Analytics | Analytics shall show total spent, category breakdown with progress bars, and monthly chart |
-| FR-32 | Settings | Users shall toggle balance visibility (persisted across app restarts) |
-| FR-33 | Settings | Users shall toggle Face ID requirement for payments |
-| FR-34 | Settings | Users shall view and edit their profile name inline |
+| FR-07 | Auth | Users shall update their name and phone number via profile settings |
+| FR-08 | Wallet | Each user shall have exactly one wallet denominated in RWF |
+| FR-09 | Wallet | New users shall receive a wallet with zero balance on registration |
+| FR-10 | Wallet | Users shall top up their wallet from a linked card (min 500 RWF, max 5,000,000 RWF) |
+| FR-11 | Wallet | Users shall transfer money to another registered user by email (min 100 RWF) |
+| FR-12 | Wallet | System shall prevent self-transfers |
+| FR-13 | Wallet | System shall reject transfers when sender has insufficient balance |
+| FR-14 | Wallet | All wallet balance changes shall be atomic PostgreSQL transactions with row-level locking |
+| FR-15 | Cards | Users shall add cards with 16-digit number, expiry date, CVV, holder name, and initial balance |
+| FR-16 | Cards | Card numbers and CVV shall be encrypted with AES-256-GCM before storage |
+| FR-17 | Cards | Users shall delete any of their linked cards |
+| FR-18 | Cards | Users shall set any card as the default payment card |
+| FR-19 | Cards | Users shall add balance to a card (simulated card loading) |
+| FR-20 | Pay | Users shall initiate an NFC payment simulation from the Pay tab |
+| FR-21 | Pay | System shall simulate terminal scanning with a 2.5-second delay |
+| FR-22 | Pay | Users shall authenticate via Face ID or fingerprint before payment is processed |
+| FR-23 | Pay | Payment shall deduct the specified amount from the wallet balance |
+| FR-24 | Transactions | All wallet operations shall create a transaction record with type, amount, description, status, category |
+| FR-25 | Transactions | Transaction list shall support pagination (limit/offset) and type filtering |
+| FR-26 | Transactions | Transactions shall include balance_before and balance_after for audit trail |
+| FR-27 | Transactions | System shall provide spending analytics by category and monthly breakdown |
+| FR-28 | Transactions | System shall provide a ledger view of transactions between two specific users |
+| FR-29 | Merchants | System shall maintain a list of verified merchants with categories |
+| FR-30 | Merchants | Payments to merchants shall be tracked in user_merchants for visit history |
 
 ### Non-Functional Requirements
 
 | ID | Category | Requirement |
 |---|---|---|
 | NFR-01 | Performance | API responses shall complete within 500ms under normal load |
-| NFR-02 | Performance | Mobile app shall render the home screen within 2 seconds of auth check completion |
-| NFR-03 | Security | Passwords shall be hashed using bcrypt with cost factor 10 |
-| NFR-04 | Security | JWT tokens shall be signed with a secret key and expire after 7 days |
-| NFR-05 | Security | All protected routes shall require a valid Authorization: Bearer token header |
-| NFR-06 | Security | Biometric authentication shall be required for every NFC payment |
-| NFR-07 | Security | Password hashes shall never be returned in any API response |
-| NFR-08 | Security | All monetary values shall be stored as integers in RWF (no floating point) |
-| NFR-09 | Usability | App shall support both iOS (14+) and Android (10+) via Expo |
-| NFR-10 | Usability | App shall use the Inter font family for consistent, professional typography |
-| NFR-11 | Usability | App shall support dark and light color themes |
-| NFR-12 | Reliability | Database cascades shall clean up wallets, cards, and transactions when a user is deleted |
-| NFR-13 | Reliability | Wallet context shall fall back to cached data if the API is temporarily unavailable |
-| NFR-14 | Reliability | User preferences (hide balance, selected card) shall persist across app restarts via AsyncStorage |
-| NFR-15 | Scalability | Transaction list endpoint shall cap at 100 records per request |
-| NFR-16 | Maintainability | Monorepo structure shall allow independent deployment of API and mobile app |
-| NFR-17 | Maintainability | All API inputs shall be validated with Zod schemas before any database access |
+| NFR-02 | Security | Passwords shall be hashed using bcrypt with default cost factor (10) |
+| NFR-03 | Security | JWT tokens shall be signed with HS256 and expire after 168 hours (7 days) |
+| NFR-04 | Security | All protected routes shall require a valid Authorization: Bearer token header |
+| NFR-05 | Security | Biometric authentication shall be required for every NFC payment |
+| NFR-06 | Security | Password hashes shall never be returned in any API response |
+| NFR-07 | Security | All monetary values shall be stored as BIGINT in RWF (no floating point) |
+| NFR-08 | Security | Card numbers and CVV shall be encrypted with AES-256-GCM before storage |
+| NFR-09 | Reliability | Wallet balance changes shall use PostgreSQL transactions with SELECT FOR UPDATE |
+| NFR-10 | Reliability | Transfer deadlocks shall be prevented by locking wallets in UUID-ascending order |
+| NFR-11 | Usability | App shall support both iOS (14+) and Android (10+) via Expo |
+| NFR-12 | Maintainability | Backend shall follow clean architecture: Handler → Service → Repository |
+| NFR-13 | Maintainability | All repository dependencies shall be injected via interfaces for testability |
+| NFR-14 | Scalability | Transaction list endpoint shall cap at 100 records per request |
+| NFR-15 | Portability | Application shall be fully containerized with Docker and docker-compose |
 
 ### Constraints
 
 | Constraint | Detail |
 |---|---|
-| Currency | RWF only, stored as integers (no decimal support) |
-| Package manager | pnpm only — npm and yarn are rejected at install time |
-| Node.js version | Version 24+ required |
-| Mobile runtime | Expo SDK — bare React Native not supported |
+| Currency | RWF only, stored as BIGINT (no decimal support) |
+| Card storage | Raw card numbers never stored — AES-256-GCM encrypted only |
 | NFC | Simulated only — real NFC hardware integration is out of scope for v1.0 |
-| OAuth | Google and Apple sign-in are stubbed — require OAuth credentials for activation |
-
-### Assumptions
-
-- Users have a smartphone with internet connectivity
-- Biometric hardware (Face ID or fingerprint sensor) is available on the device
-- The API server and mobile app are on the same network during development
-- Real NFC hardware and merchant POS integration are not required for the prototype
+| Database | PostgreSQL 16 required (uses UUID extension, ENUM types, TIMESTAMPTZ) |
+| Go version | Go 1.22+ required |
