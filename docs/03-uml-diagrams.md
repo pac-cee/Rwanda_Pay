@@ -9,22 +9,18 @@ All diagrams are written in Mermaid syntax. They can be rendered in:
 
 ## 1. Use Case Diagram
 
-Describes all interactions between actors and the system.
-
 ```mermaid
 graph TD
     subgraph Actors
         G([Guest User])
         U([Authenticated User])
-        D([Demo User])
         B([Biometric Device\nFace ID / Fingerprint])
-        S([API Server])
+        API([API Server])
     end
 
     subgraph Authentication
         UC1[Register Account]
         UC2[Login with Email]
-        UC3[Try Demo Account]
         UC4[Restore Session on Launch]
         UC5[Update Profile]
         UC6[Logout]
@@ -43,25 +39,23 @@ graph TD
         UC13[Add New Card]
         UC14[Delete Card]
         UC15[Set Default Card]
+        UC16[Add Balance to Card]
     end
 
     subgraph Transactions
-        UC16[View Transaction History]
-        UC17[Filter Transactions by Type]
-        UC18[View Spending Analytics]
+        UC17[View Transaction History]
+        UC18[Filter Transactions by Type]
+        UC19[View Spending Analytics]
+        UC20[View Contact Ledger]
     end
 
     subgraph Settings
-        UC19[Toggle Hide Balance]
-        UC20[Toggle Face ID for Payments]
-        UC21[Toggle Notifications]
+        UC21[Toggle Hide Balance]
+        UC22[Toggle Face ID for Payments]
     end
 
     G --> UC1
     G --> UC2
-    G --> UC3
-
-    D --> UC3
 
     U --> UC4
     U --> UC5
@@ -80,151 +74,140 @@ graph TD
     U --> UC19
     U --> UC20
     U --> UC21
+    U --> UC22
 
     UC10 --> UC11
     UC11 --> B
 
-    UC1 --> S
-    UC2 --> S
-    UC8 --> S
-    UC9 --> S
-    UC10 --> S
-    UC16 --> S
-    UC18 --> S
+    UC1 --> API
+    UC2 --> API
+    UC8 --> API
+    UC9 --> API
+    UC10 --> API
+    UC17 --> API
+    UC19 --> API
 ```
 
 ---
 
 ## 2. Class Diagram
 
-Describes the structure of the system — classes, attributes, methods, and relationships.
-
 ```mermaid
 classDiagram
     class User {
-        +String id
+        +UUID id
         +String email
         +String passwordHash
         +String name
         +String phone
         +String initials
-        +Date createdAt
-        +Date updatedAt
-        +register(email, password, name, phone) User
-        +login(email, password) String
-        +updateProfile(name, phone) User
-        +logout() void
-        +makeInitials(name) String
+        +Boolean isVerified
+        +Boolean isActive
+        +Time createdAt
+        +Time updatedAt
     }
 
     class Wallet {
-        +String id
-        +String userId
-        +Integer balance
-        +Date createdAt
-        +Date updatedAt
-        +getBalance() Integer
-        +topup(cardId, amount) Transaction
-        +transfer(recipientEmail, amount, description) Transaction
-        +pay(amount, description, category) Transaction
-        +checkSufficientBalance(amount) Boolean
+        +UUID id
+        +UUID userId
+        +Int64 balance
+        +String currency
+        +Boolean isFrozen
+        +Time createdAt
+        +Time updatedAt
     }
 
     class Card {
-        +String id
-        +String userId
+        +UUID id
+        +UUID userId
+        +String cardNumber
+        +String cvv
         +String last4
-        +String cardType
+        +String expiryDate
         +String holderName
-        +String cardName
+        +CardNetwork network
+        +String label
         +String color
+        +Int64 balance
         +Boolean isDefault
-        +Date createdAt
-        +setDefault() void
-        +delete() void
-        +belongsToUser(userId) Boolean
+        +CardStatus status
+        +Time createdAt
     }
 
     class Transaction {
-        +String id
-        +String userId
-        +String type
-        +Integer amount
+        +UUID id
+        +UUID userId
+        +TransactionType type
+        +TransactionStatus status
+        +Int64 amount
+        +Int64 fee
         +String description
-        +String status
-        +String cardId
-        +String recipientId
+        +TransactionCategory category
+        +String reference
+        +UUID cardId
+        +UUID merchantId
+        +UUID recipientId
         +String recipientName
-        +String category
-        +Date createdAt
-        +isIncoming() Boolean
-        +isOutgoing() Boolean
+        +Int64 balanceBefore
+        +Int64 balanceAfter
+        +Boolean isNFC
+        +Time createdAt
     }
 
-    class AuthContext {
-        +User user
-        +Integer walletBalance
-        +Boolean isAuthChecked
-        +Boolean isSigningIn
-        +signUp(email, password, name, phone) void
-        +signIn(email, password) void
-        +signInDemo() void
-        +signOut() void
-        +refreshBalance() void
-        +setWalletBalance(balance) void
+    class Merchant {
+        +UUID id
+        +String name
+        +MerchantCategory category
+        +String merchantCode
+        +Boolean isVerified
+        +Time createdAt
     }
 
-    class WalletContext {
-        +Card[] cards
-        +Transaction[] transactions
-        +String selectedCardId
-        +Boolean hideBalance
-        +Boolean isLoading
-        +addCard(card) void
-        +removeCard(id) void
-        +addTransaction(tx) void
-        +refreshWallet() void
-        +toggleHideBalance() void
-        +setSelectedCard(id) void
-        +updateProfile(partial) void
+    class AuthService {
+        +Register(ctx, input) AuthResult
+        +Login(ctx, input) AuthResult
+        +GetMe(ctx, userID) AuthResult
+        +UpdateProfile(ctx, userID, name, phone) User
     }
 
-    class APIClient {
-        +String BASE_URL
-        +getToken() Promise~String~
-        +storeToken(token) Promise~void~
-        +clearToken() Promise~void~
-        +request(path, options) Promise~T~
+    class WalletService {
+        +GetBalance(ctx, userID) Wallet
+        +Topup(ctx, input) WalletResult
+        +Transfer(ctx, input) WalletResult
+        +Pay(ctx, input) WalletResult
+    }
+
+    class CardService {
+        +AddCard(ctx, input) Card
+        +ListCards(ctx, userID) []Card
+        +AddCardBalance(ctx, cardID, userID, amount) Card
+        +DeleteCard(ctx, cardID, userID) error
+        +SetDefault(ctx, cardID, userID) Card
+    }
+
+    class TransactionService {
+        +List(ctx, userID, limit, offset, type) []Transaction
+        +Analytics(ctx, userID, days) Analytics
+        +GetLedger(ctx, userID, contactEmail) Ledger
+    }
+
+    class WalletRepository {
+        +Create(ctx, wallet) error
+        +GetByUserID(ctx, userID) Wallet
+        +UpdateBalance(ctx, walletID, balance) error
+        +TransferTx(ctx, senderID, recipientID, amount) balances
+        +TopupTx(ctx, walletID, cardID, amount) balances
+        +PayTx(ctx, walletID, amount) balance
     }
 
     class JWTService {
-        +String secret
-        +String expiresIn
-        +signToken(payload) String
-        +verifyToken(token) JWTPayload
+        +Sign(userID, email) String
+        +Verify(token) Claims
     }
 
-    class RequireAuthMiddleware {
-        +handle(req, res, next) void
-        +extractBearerToken(header) String
-    }
-
-    class DrizzleRepository {
-        +Database db
-        +select(table) QueryBuilder
-        +insert(table) InsertBuilder
-        +update(table) UpdateBuilder
-        +delete(table) DeleteBuilder
-    }
-
-    class ZodValidator {
-        +registerSchema ZodSchema
-        +loginSchema ZodSchema
-        +topupSchema ZodSchema
-        +transferSchema ZodSchema
-        +paySchema ZodSchema
-        +addCardSchema ZodSchema
-        +validate(schema, data) ParseResult
+    class CryptoService {
+        +Encrypt(plaintext) String
+        +Decrypt(ciphertext) String
     }
 
     User "1" --> "1" Wallet : owns
@@ -232,25 +215,17 @@ classDiagram
     User "1" --> "0..*" Transaction : creates
     Transaction "0..*" --> "0..1" Card : linked to
     Transaction "0..*" --> "0..1" User : recipient
+    Transaction "0..*" --> "0..1" Merchant : paid to
 
-    AuthContext --> APIClient : uses
-    AuthContext --> JWTService : delegates token ops
-    WalletContext --> AuthContext : reads balance from
-    WalletContext --> APIClient : fetches data via
-
-    RequireAuthMiddleware --> JWTService : verifies with
-    DrizzleRepository --> User : persists
-    DrizzleRepository --> Wallet : persists
-    DrizzleRepository --> Card : persists
-    DrizzleRepository --> Transaction : persists
-    ZodValidator --> APIClient : validates requests for
+    AuthService --> WalletRepository : uses
+    WalletService --> WalletRepository : uses
+    CardService --> CryptoService : encrypts with
+    AuthService --> JWTService : signs tokens with
 ```
 
 ---
 
 ## 3. Activity Diagram — NFC Tap-to-Pay Flow
-
-Describes the step-by-step flow of the most complex user interaction in the system.
 
 ```mermaid
 flowchart TD
@@ -277,7 +252,7 @@ flowchart TD
     BIO_FAIL --> TERMINAL
     BIO_RESULT -->|Success| PROCESSING[Set state to processing\nHaptic heavy feedback]
 
-    PROCESSING --> API_CALL[POST /api/wallet/pay\namount, description, category]
+    PROCESSING --> API_CALL[POST /api/v1/wallet/pay\namount, description, category]
     API_CALL --> API_RESULT{API response}
 
     API_RESULT -->|Insufficient balance| INSUF[Show insufficient balance error\nReset to idle]
@@ -286,7 +261,7 @@ flowchart TD
     NET_ERR --> IDLE
     API_RESULT -->|200 Success| SUCCESS[Set state to success\nHaptic success feedback\nUpdate wallet balance\nAdd transaction to history]
 
-    SUCCESS --> SHOW_SUCCESS[Show Payment Successful screen\nDisplay amount and merchant\nConfetti animation]
+    SUCCESS --> SHOW_SUCCESS[Show Payment Successful screen\nDisplay amount and merchant]
     SHOW_SUCCESS --> WAIT_RESET[Wait 3000ms]
     WAIT_RESET --> IDLE
 ```
@@ -297,47 +272,42 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    START([User opens app for first time]) --> SPLASH[Show animated splash screen\n3 second duration]
+    START([User opens app for first time]) --> SPLASH[Show animated splash screen]
     SPLASH --> AUTH_CHECK[Check for stored JWT token\nexpo-secure-store]
     AUTH_CHECK --> HAS_TOKEN{Token\nexists?}
 
-    HAS_TOKEN -->|Yes| RESTORE[Call GET /api/auth/me\nwith Bearer token]
+    HAS_TOKEN -->|Yes| RESTORE[Call GET /api/v1/auth/me\nwith Bearer token]
     RESTORE --> RESTORE_RESULT{Response}
     RESTORE_RESULT -->|200 OK| HOME[Navigate to Home screen\nSet user and balance]
     RESTORE_RESULT -->|401 Unauthorized| CLEAR_TOKEN[Clear invalid token]
     CLEAR_TOKEN --> AUTH_SCREEN
 
-    HAS_TOKEN -->|No| AUTH_SCREEN[Show Auth screen\nLogin / Register / Demo]
+    HAS_TOKEN -->|No| AUTH_SCREEN[Show Auth screen\nLogin / Register]
 
     AUTH_SCREEN --> CHOICE{User choice}
     CHOICE -->|Login| LOGIN_FORM[Show login form]
     CHOICE -->|Register| REG_FORM[Show registration form]
-    CHOICE -->|Demo| DEMO[Auto-login or create demo account]
 
     REG_FORM --> FILL[User fills email\npassword, name, phone]
     FILL --> VALIDATE{Client-side\nvalidation}
     VALIDATE -->|Invalid| SHOW_ERRORS[Show inline field errors]
     SHOW_ERRORS --> FILL
-    VALIDATE -->|Valid| POST_REG[POST /api/auth/register]
+    VALIDATE -->|Valid| POST_REG[POST /api/v1/auth/register]
 
     POST_REG --> REG_RESULT{Server response}
     REG_RESULT -->|400 Invalid input| SHOW_ERRORS
     REG_RESULT -->|409 Email exists| EMAIL_ERR[Show email already registered error]
     EMAIL_ERR --> FILL
     REG_RESULT -->|201 Created| STORE_TOKEN[Store JWT in expo-secure-store]
-    STORE_TOKEN --> SET_STATE[Set user state\nSet wallet balance 50000 RWF]
+    STORE_TOKEN --> SET_STATE[Set user state\nSet wallet balance 0 RWF]
     SET_STATE --> HOME
 
     LOGIN_FORM --> LOGIN_FILL[User fills email and password]
-    LOGIN_FILL --> POST_LOGIN[POST /api/auth/login]
+    LOGIN_FILL --> POST_LOGIN[POST /api/v1/auth/login]
     POST_LOGIN --> LOGIN_RESULT{Server response}
     LOGIN_RESULT -->|401 Wrong credentials| LOGIN_ERR[Show invalid credentials error]
     LOGIN_ERR --> LOGIN_FILL
     LOGIN_RESULT -->|200 OK| STORE_TOKEN
-
-    DEMO --> DEMO_RESULT{Demo account\nexists?}
-    DEMO_RESULT -->|Yes - login succeeds| STORE_TOKEN
-    DEMO_RESULT -->|No - auto-register| POST_REG
 ```
 
 ---
@@ -349,8 +319,8 @@ sequenceDiagram
     actor U as User
     participant App as Mobile App
     participant Bio as Biometric System
-    participant API as API Server
-    participant DB as Database
+    participant API as API Server (Go/Fiber)
+    participant DB as PostgreSQL
 
     U->>App: Open Pay tab
     App-->>U: Show payment form (idle state)
@@ -367,13 +337,14 @@ sequenceDiagram
     App->>Bio: authenticateAsync({ promptMessage: "Authenticate to pay" })
     Bio-->>App: { success: true }
     App->>App: setState(processing), haptic heavy
-    App->>API: POST /api/wallet/pay { amount: 2000, description: "Simba Supermarket", category: "food" }
-    API->>API: requireAuth — verify JWT
-    API->>DB: SELECT wallet WHERE userId = req.user.userId
-    DB-->>API: { balance: 50000 }
+    App->>API: POST /api/v1/wallet/pay { amount: 2000, description: "Simba Supermarket", category: "food" }
+    API->>API: middleware.Auth — verify JWT
+    API->>DB: SELECT id, balance, is_frozen FROM wallets WHERE id = ? FOR UPDATE
+    DB-->>API: { balance: 50000, is_frozen: false }
     API->>API: Check 50000 >= 2000 ✓
-    API->>DB: UPDATE wallets SET balance = 48000 WHERE userId = ?
-    API->>DB: INSERT INTO transactions { type: "payment", amount: 2000, ... }
+    API->>DB: UPDATE wallets SET balance = 48000, updated_at = NOW() WHERE id = ?
+    API->>DB: COMMIT
+    API->>DB: INSERT INTO transactions { type: "payment", amount: 2000, balance_before: 50000, balance_after: 48000 }
     DB-->>API: transaction record
     API-->>App: 200 { transaction, balance: 48000 }
     App->>App: setState(success), haptic success
@@ -387,38 +358,41 @@ sequenceDiagram
 
 ---
 
-## 6. Sequence Diagram — Wallet Transfer
+## 6. Sequence Diagram — Wallet Transfer (Atomic)
 
 ```mermaid
 sequenceDiagram
     actor S as Sender
     actor R as Recipient
     participant App as Mobile App
-    participant API as API Server
-    participant DB as Database
+    participant API as API Server (Go/Fiber)
+    participant DB as PostgreSQL
 
     S->>App: Open Send screen
     S->>App: Enter recipient@example.com, 5000 RWF, "Lunch split"
     App->>App: Validate form (email format, amount >= 100)
-    App->>API: POST /api/wallet/transfer { recipientEmail, amount: 5000, description }
-    API->>API: requireAuth — verify JWT
-    API->>API: Validate transferSchema
-    API->>API: Check sender email != recipient email
-    API->>DB: SELECT wallet WHERE userId = sender.id
-    DB-->>API: { balance: 50000 }
-    API->>API: Check 50000 >= 5000 ✓
+    App->>API: POST /api/v1/wallet/transfer { recipient_email, amount: 5000, description }
+    API->>API: middleware.Auth — verify JWT
     API->>DB: SELECT user WHERE email = "recipient@example.com"
     DB-->>API: recipient user record
-    API->>DB: UPDATE wallets SET balance = 45000 WHERE userId = sender.id
-    API->>DB: SELECT wallet WHERE userId = recipient.id
-    DB-->>API: recipient wallet { balance: 20000 }
-    API->>DB: UPDATE wallets SET balance = 25000 WHERE userId = recipient.id
-    API->>DB: INSERT transaction { type: "send", userId: sender.id, amount: 5000 }
-    API->>DB: INSERT transaction { type: "receive", userId: recipient.id, amount: 5000 }
+    API->>DB: SELECT wallet WHERE user_id = sender.id
+    DB-->>API: sender wallet { id: "wallet-A" }
+    API->>DB: SELECT wallet WHERE user_id = recipient.id
+    DB-->>API: recipient wallet { id: "wallet-B" }
+    Note over API,DB: BEGIN TRANSACTION
+    API->>DB: SELECT balance, is_frozen FROM wallets WHERE id = "wallet-A" FOR UPDATE (lock in UUID order)
+    API->>DB: SELECT balance, is_frozen FROM wallets WHERE id = "wallet-B" FOR UPDATE
+    DB-->>API: sender: { balance: 50000 }, recipient: { balance: 20000 }
+    API->>API: Check 50000 >= 5000 ✓
+    API->>DB: UPDATE wallets SET balance = 45000 WHERE id = "wallet-A"
+    API->>DB: UPDATE wallets SET balance = 25000 WHERE id = "wallet-B"
+    API->>DB: COMMIT
+    Note over API,DB: END TRANSACTION — atomic, no race condition possible
+    API->>DB: INSERT transaction { type: "send", user_id: sender.id, amount: 5000 }
+    API->>DB: INSERT transaction { type: "receive", user_id: recipient.id, amount: 5000 }
     DB-->>API: sender transaction
     API-->>App: 200 { transaction, balance: 45000 }
     App->>App: setWalletBalance(45000)
-    App->>App: addTransaction(transaction)
     App-->>S: "Sent 5,000 RWF successfully!"
     Note over DB,R: Next time Recipient opens app, their balance shows 25,000 RWF
 ```
@@ -427,18 +401,15 @@ sequenceDiagram
 
 ## 7. Component Diagram
 
-Describes the physical components of the system and their dependencies.
-
 ```mermaid
 graph TB
     subgraph MobileApp["📱 Mobile Application — Expo React Native"]
         subgraph ScreenLayer["Screen Layer (Expo Router v6)"]
-            AUTH_SCR["auth.tsx\nLogin / Register / Demo"]
+            AUTH_SCR["auth.tsx\nLogin / Register"]
             HOME_SCR["index.tsx\nHome — Balance + Cards"]
             PAY_SCR["pay.tsx\nNFC Tap-to-Pay"]
-            SEND_SCR["send.tsx\nSend Money Modal"]
-            RECEIVE_SCR["receive.tsx\nReceive Modal"]
-            TOPUP_SCR["topup.tsx\nTop-Up Modal"]
+            SEND_SCR["send.tsx\nSend Money"]
+            TOPUP_SCR["topup.tsx\nTop-Up Wallet"]
             TX_SCR["transactions.tsx\nTransaction List"]
             AN_SCR["analytics.tsx\nSpending Charts"]
             SET_SCR["settings.tsx\nProfile + Preferences"]
@@ -451,48 +422,52 @@ graph TB
         end
 
         subgraph LibLayer["Library Layer"]
-            API_CLIENT["lib/api.ts\nHTTP Client + Auth helpers"]
+            API_CLIENT["lib/api.ts\nHTTP Client — /api/v1/"]
             SECURE["expo-secure-store\nEncrypted JWT storage"]
             ASYNC_ST["AsyncStorage\nPreferences persistence"]
             BIO["expo-local-authentication\nFace ID / Fingerprint"]
             HAPTICS["expo-haptics\nTactile feedback"]
-            REANIMATED["react-native-reanimated\nUI thread animations"]
         end
     end
 
-    subgraph APIServer["🖥️ API Server — Node.js 24 / Express 5"]
+    subgraph APIServer["🖥️ API Server — Go 1.22 / Fiber v2"]
         subgraph MiddlewareLayer["Middleware Chain"]
-            CORS_MW["cors\nCross-origin requests"]
-            LOG_MW["pino-http\nStructured request logging"]
-            BODY_MW["express.json\nRequest body parsing"]
-            AUTH_MW["requireAuth\nJWT verification"]
+            RECOVER_MW["recover.New()\nPanic recovery"]
+            LOG_MW["logger.New()\nRequest logging"]
+            CORS_MW["cors.New()\nCross-origin requests"]
+            AUTH_MW["middleware.Auth()\nJWT verification"]
         end
 
-        subgraph RouteLayer["Route Handlers"]
-            AUTH_RT["/auth\nregister · login · me · profile · logout"]
-            WALLET_RT["/wallet\nbalance · topup · transfer · pay"]
-            CARDS_RT["/cards\nlist · add · delete · set-default"]
-            TX_RT["/transactions\nlist · analytics"]
-            HEALTH_RT["/healthz\nhealth check"]
+        subgraph HandlerLayer["Handlers"]
+            AUTH_H["AuthHandler\nregister · login · me · profile · logout"]
+            WALLET_H["WalletHandler\nbalance · topup · transfer · pay"]
+            CARD_H["CardHandler\nlist · add · delete · default · balance"]
+            TX_H["TransactionHandler\nlist · analytics · ledger"]
         end
 
         subgraph ServiceLayer["Services"]
-            JWT_SVC["JWT Service\nsignToken · verifyToken"]
-            BCRYPT_SVC["bcryptjs\nhash · compare"]
-            DRIZZLE["Drizzle ORM\ntype-safe SQL queries"]
-            PINO["pino\nstructured logger"]
+            AUTH_SVC["AuthService\nbcrypt · JWT signing"]
+            WALLET_SVC["WalletService\nbusiness rules · validation"]
+            CARD_SVC["CardService\nAES-256-GCM encryption"]
+            TX_SVC["TransactionService\nanalytics · ledger"]
+        end
+
+        subgraph RepoLayer["Repositories (pgx/v5)"]
+            USER_REPO["UserRepository\nCRUD users"]
+            WALLET_REPO["WalletTxRepository\nCRUD + TransferTx + TopupTx + PayTx"]
+            CARD_REPO["CardRepository\nCRUD cards"]
+            TX_REPO["TransactionRepository\nCRUD + analytics + ledger"]
+            MERCHANT_REPO["MerchantRepository\nread merchants"]
         end
     end
 
-    subgraph SharedLibs["📦 Shared Libraries — pnpm workspace"]
-        DB_LIB["@workspace/db\nDrizzle schema definitions\nZod validators\nDB connection"]
-        ZOD_LIB["@workspace/api-zod\nGenerated Zod types\nfrom OpenAPI spec"]
-        CLIENT_LIB["@workspace/api-client-react\nGenerated React Query hooks"]
-    end
-
-    subgraph DatabaseLayer["🗄️ Database"]
-        SQLITE[("SQLite\nbetter-sqlite3\nDevelopment")]
-        PG[("PostgreSQL 15\nProduction")]
+    subgraph DatabaseLayer["🗄️ PostgreSQL 16"]
+        USERS_T[("users")]
+        WALLETS_T[("wallets")]
+        CARDS_T[("cards")]
+        TX_T[("transactions")]
+        MERCHANTS_T[("merchants")]
+        USER_MERCHANTS_T[("user_merchants")]
     end
 
     ScreenLayer --> ContextLayer
@@ -501,19 +476,17 @@ graph TB
     WALLET_CTX --> ASYNC_ST
     PAY_SCR --> BIO
     PAY_SCR --> HAPTICS
-    ScreenLayer --> REANIMATED
 
-    API_CLIENT -->|"HTTP REST JSON\nAuthorization: Bearer"| MiddlewareLayer
-    MiddlewareLayer --> RouteLayer
-    RouteLayer --> AUTH_MW
-    AUTH_MW --> JWT_SVC
-    RouteLayer --> ServiceLayer
-    ServiceLayer --> DB_LIB
-    DRIZZLE --> SQLITE
-    DRIZZLE --> PG
-
-    DB_LIB --> ZOD_LIB
-    RouteLayer --> DB_LIB
-    MobileApp --> CLIENT_LIB
-    CLIENT_LIB --> ZOD_LIB
+    API_CLIENT -->|"HTTP REST JSON\nAuthorization: Bearer\n/api/v1/"| MiddlewareLayer
+    MiddlewareLayer --> HandlerLayer
+    HandlerLayer --> AUTH_MW
+    AUTH_MW --> AUTH_SVC
+    HandlerLayer --> ServiceLayer
+    ServiceLayer --> RepoLayer
+    RepoLayer --> USERS_T
+    RepoLayer --> WALLETS_T
+    RepoLayer --> CARDS_T
+    RepoLayer --> TX_T
+    RepoLayer --> MERCHANTS_T
+    RepoLayer --> USER_MERCHANTS_T
 ```
