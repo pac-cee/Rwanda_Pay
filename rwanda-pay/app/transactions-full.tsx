@@ -18,8 +18,9 @@ type Filter = "all" | TransactionType;
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
   { key: "payment", label: "Payments" },
-  { key: "received", label: "Received" },
-  { key: "sent", label: "Sent" },
+  { key: "receive", label: "Received" },
+  { key: "send", label: "Sent" },
+  { key: "topup", label: "Top-ups" },
 ];
 
 function groupByDate(txs: Transaction[]) {
@@ -66,7 +67,7 @@ export default function TransactionsFullScreen() {
   const totalSpent = useMemo(
     () =>
       transactions
-        .filter((t) => t.type === "payment" || t.type === "sent")
+        .filter((t) => t.type === "payment" || t.type === "send")
         .reduce((s, t) => s + t.amount, 0),
     [transactions]
   );
