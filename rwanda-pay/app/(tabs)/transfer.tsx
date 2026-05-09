@@ -66,7 +66,7 @@ export default function TransferScreen() {
     setSending(true);
     try {
       const { balance } = await walletApi.transfer({
-        recipientEmail: email,
+        recipient_email: email,
         amount: amountNum,
         description: note.trim() || `Transfer to ${email}`,
       });
