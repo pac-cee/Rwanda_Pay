@@ -3,13 +3,13 @@ package unit
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/rwandapay/backend/internal/domain"
 	"github.com/rwandapay/backend/internal/service"
 	"github.com/rwandapay/backend/pkg/jwt"
 	"github.com/rwandapay/backend/tests/mocks"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,9 +28,9 @@ func TestAuthService_Register_Success(t *testing.T) {
 
 	userRepo.On("GetByEmail", context.Background(), "alice@example.com").
 		Return(nil, domain.ErrNotFound)
-	userRepo.On("Create", context.Background(), mock_any_user()).
+	userRepo.On("Create", context.Background(), mockAnyUser()).
 		Return(nil)
-	walletRepo.On("Create", context.Background(), mock_any_wallet()).
+	walletRepo.On("Create", context.Background(), mockAnyWallet()).
 		Return(nil)
 
 	result, err := svc.Register(context.Background(), service.RegisterInput{
@@ -78,9 +78,9 @@ func TestAuthService_Register_EmailNormalisedToLowercase(t *testing.T) {
 
 	userRepo.On("GetByEmail", context.Background(), "alice@example.com").
 		Return(nil, domain.ErrNotFound)
-	userRepo.On("Create", context.Background(), mock_any_user()).
+	userRepo.On("Create", context.Background(), mockAnyUser()).
 		Return(nil)
-	walletRepo.On("Create", context.Background(), mock_any_wallet()).
+	walletRepo.On("Create", context.Background(), mockAnyWallet()).
 		Return(nil)
 
 	result, err := svc.Register(context.Background(), service.RegisterInput{
@@ -112,8 +112,8 @@ func TestAuthService_Register_InitialsGeneratedCorrectly(t *testing.T) {
 
 			userRepo.On("GetByEmail", context.Background(), "test@example.com").
 				Return(nil, domain.ErrNotFound)
-			userRepo.On("Create", context.Background(), mock_any_user()).Return(nil)
-			walletRepo.On("Create", context.Background(), mock_any_wallet()).Return(nil)
+			userRepo.On("Create", context.Background(), mockAnyUser()).Return(nil)
+			walletRepo.On("Create", context.Background(), mockAnyWallet()).Return(nil)
 
 			result, err := svc.Register(context.Background(), service.RegisterInput{
 				Email: "test@example.com", Password: "pass123", Name: tt.name,
@@ -122,6 +122,24 @@ func TestAuthService_Register_InitialsGeneratedCorrectly(t *testing.T) {
 			assert.Equal(t, tt.expected, result.User.Initials)
 		})
 	}
+}
+
+func TestAuthService_Register_WalletStartsAtZero(t *testing.T) {
+	userRepo := &mocks.MockUserRepository{}
+	walletRepo := &mocks.MockWalletRepository{}
+	svc := newAuthService(userRepo, walletRepo)
+
+	userRepo.On("GetByEmail", context.Background(), "test@example.com").
+		Return(nil, domain.ErrNotFound)
+	userRepo.On("Create", context.Background(), mockAnyUser()).Return(nil)
+	walletRepo.On("Create", context.Background(), mockAnyWallet()).Return(nil)
+
+	result, err := svc.Register(context.Background(), service.RegisterInput{
+		Email: "test@example.com", Password: "pass123", Name: "Test User",
+	})
+	require.NoError(t, err)
+	// Wallet starts at 0 — user must add a card and top up
+	assert.Equal(t, int64(0), result.Wallet.Balance)
 }
 
 // ─── Login ────────────────────────────────────────────────────────────────────
@@ -143,7 +161,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 	wallet := &domain.Wallet{
 		ID:       "wallet-123",
 		UserID:   "user-123",
-		Balance:  50000,
+		Balance:  0,
 		Currency: "RWF",
 	}
 
@@ -157,7 +175,7 @@ func TestAuthService_Login_Success(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "user-123", result.User.ID)
-	assert.Equal(t, int64(50000), result.Wallet.Balance)
+	assert.Equal(t, int64(0), result.Wallet.Balance)
 	assert.NotEmpty(t, result.Token)
 }
 
@@ -282,19 +300,14 @@ func TestAuthService_UpdateProfile_UpdatesPhone(t *testing.T) {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-import "github.com/stretchr/testify/mock"
-
-func mock_any_user() interface{} {
+func mockAnyUser() interface{} {
 	return mock.MatchedBy(func(u *domain.User) bool {
 		return u.ID != "" && u.Email != "" && u.PasswordHash != ""
 	})
 }
 
-func mock_any_wallet() interface{} {
+func mockAnyWallet() interface{} {
 	return mock.MatchedBy(func(w *domain.Wallet) bool {
 		return w.ID != "" && w.UserID != "" && w.Balance == 0 && w.Currency == "RWF"
 	})
 }
-
-// Suppress unused import
-var _ = time.Now
