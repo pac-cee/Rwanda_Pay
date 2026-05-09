@@ -171,39 +171,6 @@ pnpm --filter @workspace/rwanda-pay run dev
 
 ---
 
-## Running on a Physical Phone (Expo Go)
-
-Your phone cannot reach `localhost` — it needs your Mac's local IP address.
-
-### Step 1 — Find your Mac's IP
-```bash
-ipconfig getifaddr en0
-# Example output: 192.168.1.31
-```
-
-### Step 2 — Update the dev script
-Open `artifacts/rwanda-pay/package.json` and update the `dev` script:
-```json
-"dev": "EXPO_PUBLIC_DOMAIN=<YOUR_IP>:8080 pnpm exec expo start --port 8081 --lan"
-```
-Replace `<YOUR_IP>` with the IP from Step 1, e.g. `192.168.1.31`.
-
-### Step 3 — Restart Expo
-```bash
-pnpm --filter @workspace/rwanda-pay run dev
-```
-
-### Step 4 — Scan the QR code
-Open the **Expo Go** app on your iPhone or Android and scan the QR code shown in the terminal.
-
-> **Important:** Your phone and Mac must be on the **same WiFi network**.
-
-> **IP changes?** Your IP changes when you switch networks or restart your router. Re-run `ipconfig getifaddr en0` and update the `package.json` dev script each time.
-
-> **Tip — set a static IP:** Go to System Settings → Network → WiFi → Details → TCP/IP → Configure IPv4 → Manually. Set a fixed IP like `192.168.1.100` so it never changes.
-
----
-
 ## Running with Docker
 
 ```bash
