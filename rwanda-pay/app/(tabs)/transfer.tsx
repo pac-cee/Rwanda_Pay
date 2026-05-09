@@ -38,6 +38,7 @@ export default function TransferScreen() {
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const successScale = useSharedValue(0);
   const successOpacity = useSharedValue(0);
