@@ -437,6 +437,21 @@
           "200": { "description": "Analytics: total_in, total_out, by_category, monthly breakdown" }
         }
       }
+    },
+    "/api/v1/transactions/ledger/{email}": {
+      "get": {
+        "summary": "Transaction ledger with a contact",
+        "description": "Returns all transactions between the authenticated user and a contact, plus totals.",
+        "tags": ["Transactions"],
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "email", "in": "path", "required": true, "schema": { "type": "string" }, "description": "Contact email address" }
+        ],
+        "responses": {
+          "200": { "description": "Ledger with contact info, transactions, total_sent, total_received, net" },
+          "404": { "description": "Contact not found" }
+        }
+      }
     }
   }
 }
