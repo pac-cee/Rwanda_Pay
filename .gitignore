@@ -65,3 +65,19 @@ coverage.txt
 tmp/
 temp/
 .cache/
+
+# Next.js
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# Lock files (optional - uncomment if you want to ignore)
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# Documentation (optional - keep if needed)
+# ADMIN_AND_LANDING.md
+# COMPLETE_SETUP.md
+# IMPLEMENTATION_GUIDE.md
