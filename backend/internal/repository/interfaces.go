@@ -11,6 +11,10 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.User, error)
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	Update(ctx context.Context, user *domain.User) error
+	Delete(ctx context.Context, id string) error
+	Count(ctx context.Context) (int, error)
+	CountActiveToday(ctx context.Context) (int, error)
+	ListAll(ctx context.Context, limit, offset int) ([]*domain.User, int, error)
 }
 
 // WalletRepository provides basic wallet data access.
@@ -34,9 +38,13 @@ type CardRepository interface {
 
 type MerchantRepository interface {
 	List(ctx context.Context, limit, offset int) ([]*domain.Merchant, error)
+	ListAll(ctx context.Context) ([]*domain.Merchant, error)
 	GetByID(ctx context.Context, id string) (*domain.Merchant, error)
 	GetByCode(ctx context.Context, code string) (*domain.Merchant, error)
 	Search(ctx context.Context, query string, limit int) ([]*domain.Merchant, error)
+	Create(ctx context.Context, name, email, phone, category, description, address, city string) (*domain.Merchant, error)
+	Update(ctx context.Context, id, name, email, phone, description string) error
+	Delete(ctx context.Context, id string) error
 }
 
 type UserMerchantRepository interface {
@@ -52,6 +60,9 @@ type TransactionRepository interface {
 	CountByUserID(ctx context.Context, userID string, txType string) (int, error)
 	GetAnalytics(ctx context.Context, userID string, days int) (*Analytics, error)
 	GetLedger(ctx context.Context, userID, contactID string) (*Ledger, error)
+	Count(ctx context.Context) (int, error)
+	GetTotalVolume(ctx context.Context) (int64, error)
+	ListAll(ctx context.Context, limit, offset int) ([]*domain.Transaction, int, error)
 }
 
 // Analytics result from the DB
