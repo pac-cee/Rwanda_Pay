@@ -7,6 +7,7 @@ import (
 	"github.com/rwandapay/backend/internal/config"
 	"github.com/rwandapay/backend/internal/database"
 	"github.com/rwandapay/backend/internal/handler"
+	"github.com/rwandapay/backend/internal/middleware"
 	"github.com/rwandapay/backend/internal/repository"
 	"github.com/rwandapay/backend/internal/router"
 	"github.com/rwandapay/backend/internal/service"
@@ -44,6 +45,7 @@ func main() {
 	userMerchantRepo := repository.NewUserMerchantRepository(db)
 	txRepo := repository.NewTransactionRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
+	logRepo := repository.NewActivityLogRepository(db)
 
 	// Services
 	notifSvc := service.NewNotificationService(notifRepo)
@@ -59,6 +61,7 @@ func main() {
 		Card:         handler.NewCardHandler(cardSvc),
 		Transaction:  handler.NewTransactionHandler(txSvc),
 		Notification: handler.NewNotificationHandler(notifSvc),
+		Admin:        handler.NewAdminHandler(userRepo, txRepo, merchantRepo, logRepo),
 	}
 
 	// Fiber app
@@ -66,6 +69,9 @@ func main() {
 		AppName:      "Rwanda Pay API v1",
 		ErrorHandler: errorHandler,
 	})
+
+	// Global activity logging
+	app.Use(middleware.ActivityLogger(logRepo))
 
 	router.Setup(app, handlers, jwtSvc)
 
