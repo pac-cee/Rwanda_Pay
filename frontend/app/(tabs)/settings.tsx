@@ -87,7 +87,6 @@ export default function SettingsScreen() {
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState(profile.name);
   const [faceIdEnabled, setFaceIdEnabled] = useState(true);
-  const [notifEnabled, setNotifEnabled] = useState(true);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -197,19 +196,6 @@ export default function SettingsScreen() {
             />
           }
         />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow
-          icon="bell"
-          label="Notifications"
-          right={
-            <Switch
-              value={notifEnabled}
-              onValueChange={setNotifEnabled}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor="#FFF"
-            />
-          }
-        />
       </View>
 
       <SectionHeader title="Security" />
@@ -226,19 +212,6 @@ export default function SettingsScreen() {
               thumbColor="#FFF"
             />
           }
-        />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow
-          icon="key"
-          label="Change PIN"
-          onPress={() => Alert.alert("Change PIN", "Coming soon.", [{ text: "OK" }])}
-        />
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-        <SettingRow
-          icon="shield"
-          label="Two-Factor Authentication"
-          sublabel="SMS verification active"
-          onPress={() => Alert.alert("2FA", "Two-factor authentication is enabled.", [{ text: "OK" }])}
         />
       </View>
 

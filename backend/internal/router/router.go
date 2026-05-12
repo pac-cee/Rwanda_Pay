@@ -12,10 +12,11 @@ import (
 )
 
 type Handlers struct {
-	Auth        *handler.AuthHandler
-	Wallet      *handler.WalletHandler
-	Card        *handler.CardHandler
-	Transaction *handler.TransactionHandler
+	Auth         *handler.AuthHandler
+	Wallet       *handler.WalletHandler
+	Card         *handler.CardHandler
+	Transaction  *handler.TransactionHandler
+	Notification *handler.NotificationHandler
 }
 
 func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
@@ -77,6 +78,14 @@ func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
 	transactions.Get("/", h.Transaction.List)
 	transactions.Get("/analytics", h.Transaction.Analytics)
 	transactions.Get("/ledger/:email", h.Transaction.Ledger)
+
+	// Notifications
+	notifications := protected.Group("/notifications")
+	notifications.Get("/", h.Notification.List)
+	notifications.Get("/unread-count", h.Notification.GetUnreadCount)
+	notifications.Put("/:id/read", h.Notification.MarkAsRead)
+	notifications.Put("/read-all", h.Notification.MarkAllAsRead)
+	notifications.Delete("/:id", h.Notification.Delete)
 
 	// Merchants (read-only for users)
 	// Future: add merchant handler

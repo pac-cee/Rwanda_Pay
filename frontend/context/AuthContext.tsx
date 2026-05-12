@@ -1,14 +1,27 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { authApi, clearToken, getToken, storeToken, type ApiUser } from "@/lib/api";
+import {
+  authenticateWithBiometrics,
+  disableBiometricLogin,
+  enableBiometricLogin,
+  getBiometricType,
+  isBiometricAvailable,
+  isBiometricLoginEnabled,
+} from "@/lib/biometric";
 
 interface AuthContextType {
   user: ApiUser | null;
   isAuthChecked: boolean;
   isSigningIn: boolean;
   signUp: (email: string, password: string, name: string, phone?: string) => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string, enableBiometric?: boolean) => Promise<void>;
+  signInWithBiometric: () => Promise<boolean>;
   signInDemo: () => Promise<void>;
   signOut: () => Promise<void>;
+  biometricAvailable: boolean;
+  biometricEnabled: boolean;
+  biometricType: string;
+  toggleBiometric: (email: string, password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,9 +30,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null);
   const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricType, setBiometricType] = useState("Biometric");
 
   useEffect(() => {
     (async () => {
+      // Check biometric availability
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
+      if (available) {
+        const type = await getBiometricType();
+        setBiometricType(type);
+        const enabled = await isBiometricLoginEnabled();
+        setBiometricEnabled(enabled);
+      }
+
+      // Check existing session
       const token = await getToken();
       if (token) {
         try {
@@ -44,16 +71,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const signIn = useCallback(async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string, enableBiometric = false) => {
     setIsSigningIn(true);
     try {
       const { user: u, token } = await authApi.login({ email, password });
       if (token && typeof token === "string") await storeToken(token);
       setUser(u);
+      
+      // Enable biometric if requested and available
+      if (enableBiometric && biometricAvailable) {
+        await enableBiometricLogin(email, password);
+        setBiometricEnabled(true);
+      }
     } finally {
       setIsSigningIn(false);
     }
-  }, []);
+  }, [biometricAvailable]);
+
+  const signInWithBiometric = useCallback(async (): Promise<boolean> => {
+    if (!biometricEnabled) return false;
+    
+    setIsSigningIn(true);
+    try {
+      const credentials = await authenticateWithBiometrics();
+      if (!credentials) return false;
+
+      const { user: u, token } = await authApi.login({
+        email: credentials.email,
+        password: credentials.password,
+      });
+      if (token && typeof token === "string") await storeToken(token);
+      setUser(u);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      setIsSigningIn(false);
+    }
+  }, [biometricEnabled]);
 
   const signInDemo = useCallback(async () => {
     setIsSigningIn(true);
@@ -89,11 +144,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     try { await authApi.logout(); } catch {}
     await clearToken();
+    await disableBiometricLogin();
+    setBiometricEnabled(false);
     setUser(null);
   }, []);
 
+  const toggleBiometric = useCallback(async (email: string, password: string) => {
+    if (biometricEnabled) {
+      await disableBiometricLogin();
+      setBiometricEnabled(false);
+    } else {
+      await enableBiometricLogin(email, password);
+      setBiometricEnabled(true);
+    }
+  }, [biometricEnabled]);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthChecked, isSigningIn, signUp, signIn, signInDemo, signOut }}>
+    <AuthContext.Provider value={{
+      user,
+      isAuthChecked,
+      isSigningIn,
+      signUp,
+      signIn,
+      signInWithBiometric,
+      signInDemo,
+      signOut,
+      biometricAvailable,
+      biometricEnabled,
+      biometricType,
+      toggleBiometric,
+    }}>
       {children}
     </AuthContext.Provider>
   );

@@ -70,8 +70,18 @@ function InputField({
 
 export default function AuthScreen() {
   const insets = useSafeAreaInsets();
-  const { signIn, signUp, signInDemo, isSigningIn, user } = useAuth();
+  const {
+    signIn,
+    signUp,
+    signInWithBiometric,
+    isSigningIn,
+    user,
+    biometricAvailable,
+    biometricEnabled,
+    biometricType,
+  } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
+  const [enableBiometric, setEnableBiometric] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -111,8 +121,26 @@ export default function AuthScreen() {
     if (user) router.replace("/(tabs)");
   }, [user]);
 
+  // Auto-trigger biometric login if enabled
+  useEffect(() => {
+    if (biometricEnabled && mode === "signin") {
+      handleBiometricLogin();
+    }
+  }, [biometricEnabled, mode]);
+
   const topPad = Platform.OS === "web" ? 24 : insets.top;
   const bottomPad = Platform.OS === "web" ? 24 : insets.bottom;
+
+  const handleBiometricLogin = async () => {
+    try {
+      const success = await signInWithBiometric();
+      if (!success) {
+        Alert.alert("Authentication Failed", "Please sign in with your email and password.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message ?? "Biometric authentication failed.");
+    }
+  };
 
   const handleSubmit = async () => {
     if (!email.trim() || !password.trim()) {
@@ -125,7 +153,7 @@ export default function AuthScreen() {
     }
     try {
       if (mode === "signin") {
-        await signIn(email.trim().toLowerCase(), password);
+        await signIn(email.trim().toLowerCase(), password, enableBiometric);
       } else {
         await signUp(email.trim().toLowerCase(), password, name.trim(), phone.trim() || undefined);
       }
@@ -225,6 +253,47 @@ export default function AuthScreen() {
               />
             )}
 
+            {/* Biometric toggle (only for sign in) */}
+            {mode === "signin" && biometricAvailable && (
+              <Pressable
+                style={styles.biometricToggle}
+                onPress={() => setEnableBiometric((v) => !v)}
+              >
+                <View style={styles.biometricLeft}>
+                  <Feather name="shield" size={18} color={PRIMARY} />
+                  <Text style={styles.biometricText}>Enable {biometricType}</Text>
+                </View>
+                <View
+                  style={[
+                    styles.toggleTrack,
+                    enableBiometric && styles.toggleTrackActive,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.toggleThumb,
+                      enableBiometric && styles.toggleThumbActive,
+                    ]}
+                  />
+                </View>
+              </Pressable>
+            )}
+
+            {/* Biometric login button (if already enabled) */}
+            {mode === "signin" && biometricEnabled && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.biometricBtn,
+                  { opacity: pressed || isSigningIn ? 0.8 : 1 },
+                ]}
+                onPress={handleBiometricLogin}
+                disabled={isSigningIn}
+              >
+                <Feather name="shield" size={18} color={PRIMARY} />
+                <Text style={styles.biometricBtnText}>Sign in with {biometricType}</Text>
+              </Pressable>
+            )}
+
             {/* Submit */}
             <Pressable
               style={({ pressed }) => [
@@ -241,34 +310,6 @@ export default function AuthScreen() {
               )}
             </Pressable>
 
-            {/* Divider */}
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Social buttons (coming soon placeholders) */}
-            <View style={styles.socialRow}>
-              <Pressable style={styles.socialBtn} onPress={handleGoogleSoon}>
-                <Text style={styles.socialG}>G</Text>
-                <Text style={styles.socialBtnText}>Google</Text>
-              </Pressable>
-              <Pressable style={[styles.socialBtn, styles.socialBtnDark]} onPress={handleAppleSoon}>
-                <Text style={styles.socialApple}></Text>
-                <Text style={[styles.socialBtnText, { color: "#FFF" }]}>Apple</Text>
-              </Pressable>
-            </View>
-
-            {/* Demo */}
-            <Pressable
-              onPress={signInDemo}
-              disabled={isSigningIn}
-              style={({ pressed }) => [styles.demoBtn, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <Text style={styles.demoText}>Skip — explore demo account</Text>
-            </Pressable>
-
             <Text style={styles.terms}>
               By continuing you agree to our{" "}
               <Text style={styles.termsLink}>Terms of Service</Text> and{" "}
@@ -279,13 +320,6 @@ export default function AuthScreen() {
       </View>
     </KeyboardAvoidingView>
   );
-}
-
-function handleGoogleSoon() {
-  Alert.alert("Coming Soon", "Google sign-in will be available soon.");
-}
-function handleAppleSoon() {
-  Alert.alert("Coming Soon", "Apple sign-in will be available soon.");
 }
 
 const styles = StyleSheet.create({
@@ -382,38 +416,6 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   submitText: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginVertical: 2,
-  },
-  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: "#D1D5DB" },
-  dividerText: { color: "#9CA3AF", fontSize: 12, fontFamily: "Inter_400Regular" },
-  socialRow: { flexDirection: "row", gap: 12 },
-  socialBtn: {
-    flex: 1,
-    height: 50,
-    borderRadius: 14,
-    backgroundColor: "#FFF",
-    borderWidth: 1,
-    borderColor: "#E5E7EB",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
-  socialBtnDark: { backgroundColor: "#0A0A0A", borderColor: "#0A0A0A" },
-  socialG: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#4285F4" },
-  socialApple: { fontSize: 18, color: "#FFF" },
-  socialBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#1A1A1A" },
-  demoBtn: { alignItems: "center", paddingVertical: 10 },
-  demoText: {
-    color: "#9CA3AF",
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
-    textDecorationLine: "underline",
-  },
   terms: {
     color: "#9CA3AF",
     fontSize: 11,
@@ -422,4 +424,61 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   termsLink: { color: PRIMARY, fontFamily: "Inter_500Medium" },
+  biometricToggle: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+  },
+  biometricLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  biometricText: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    color: "#1A1A1A",
+  },
+  toggleTrack: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#E5E7EB",
+    padding: 2,
+    justifyContent: "center",
+  },
+  toggleTrackActive: {
+    backgroundColor: PRIMARY,
+  },
+  toggleThumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  toggleThumbActive: {
+    transform: [{ translateX: 20 }],
+  },
+  biometricBtn: {
+    height: 50,
+    backgroundColor: "#FFF",
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: PRIMARY,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+  },
+  biometricBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+    color: PRIMARY,
+  },
 });

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { cardsApi, transactionsApi, walletApi, type ApiCard, type ApiTransaction } from "@/lib/api";
+import { useAuth } from "./AuthContext";
 
 export type CardType = "visa" | "mastercard" | "amex";
 export type TransactionType = "payment" | "received" | "sent" | "topup" | "send" | "receive" | "refund" | "withdrawal";
@@ -115,6 +116,7 @@ const STORAGE_KEYS = {
 };
 
 export function WalletProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [cards, setCards] = useState<Card[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -123,6 +125,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const [notificationCount, setNotificationCount] = useState(0);
   const [profile, setProfile] = useState<Profile>({ name: "", phone: "", email: "", initials: "" });
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const refreshWallet = useCallback(async () => {
     try {
@@ -145,6 +148,29 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    const userId = user?.id ?? null;
+    if (userId !== currentUserId) {
+      setCards([]);
+      setTransactions([]);
+      setWalletBalance(0);
+      setSelectedCardIdState("");
+      setCurrentUserId(userId);
+      
+      // Update profile from user data
+      if (user) {
+        setProfile({
+          name: user.name,
+          phone: user.phone || "",
+          email: user.email,
+          initials: user.initials,
+        });
+      } else {
+        setProfile({ name: "", phone: "", email: "", initials: "" });
+      }
+    }
+  }, [user, currentUserId]);
+
+  useEffect(() => {
     (async () => {
       try {
         const [sc, hb, prof, notifs] = await Promise.all([
@@ -158,10 +184,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         if (prof) setProfile(JSON.parse(prof));
         if (notifs) setNotificationCount(JSON.parse(notifs));
       } catch {}
-      await refreshWallet();
+      if (user) await refreshWallet();
       setIsLoading(false);
     })();
-  }, [refreshWallet]);
+  }, [refreshWallet, user]);
 
   const setSelectedCardId = useCallback((id: string) => {
     setSelectedCardIdState(id);

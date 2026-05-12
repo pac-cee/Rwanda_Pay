@@ -209,3 +209,25 @@ INSERT INTO merchants (name, category, description, city, merchant_code, is_veri
     ('Bourbon Coffee',       'food_beverage',  'Coffee and light meals',         'Kigali', 'BOURBON001', TRUE),
     ('Nakumatt',             'retail',         'Supermarket chain',              'Kigali', 'NAK001',     TRUE),
     ('Kigali Arena',         'entertainment',  'Sports and entertainment venue', 'Kigali', 'ARENA001',   TRUE);
+
+-- ============================================================
+-- NOTIFICATIONS
+-- User notifications for transactions, payments, etc.
+-- ============================================================
+
+CREATE TYPE notification_type AS ENUM ('payment_received', 'payment_sent', 'topup_success', 'card_added', 'payment_success', 'payment_failed', 'system');
+
+CREATE TABLE notifications (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type            notification_type NOT NULL,
+    title           VARCHAR(255) NOT NULL,
+    message         TEXT NOT NULL,
+    transaction_id  UUID REFERENCES transactions(id) ON DELETE SET NULL,
+    is_read         BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_is_read ON notifications(is_read);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);

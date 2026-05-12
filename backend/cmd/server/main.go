@@ -43,19 +43,22 @@ func main() {
 	merchantRepo := repository.NewMerchantRepository(db)
 	userMerchantRepo := repository.NewUserMerchantRepository(db)
 	txRepo := repository.NewTransactionRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 
 	// Services
+	notifSvc := service.NewNotificationService(notifRepo)
 	authSvc := service.NewAuthService(userRepo, walletRepo, jwtSvc)
-	walletSvc := service.NewWalletService(walletRepo, cardRepo, userRepo, merchantRepo, userMerchantRepo, txRepo)
+	walletSvc := service.NewWalletService(walletRepo, cardRepo, userRepo, merchantRepo, userMerchantRepo, txRepo, notifSvc)
 	cardSvc := service.NewCardService(cardRepo, cryptoSvc)
 	txSvc := service.NewTransactionService(txRepo, userRepo)
 
 	// Handlers
 	handlers := router.Handlers{
-		Auth:        handler.NewAuthHandler(authSvc),
-		Wallet:      handler.NewWalletHandler(walletSvc),
-		Card:        handler.NewCardHandler(cardSvc),
-		Transaction: handler.NewTransactionHandler(txSvc),
+		Auth:         handler.NewAuthHandler(authSvc),
+		Wallet:       handler.NewWalletHandler(walletSvc),
+		Card:         handler.NewCardHandler(cardSvc),
+		Transaction:  handler.NewTransactionHandler(txSvc),
+		Notification: handler.NewNotificationHandler(notifSvc),
 	}
 
 	// Fiber app

@@ -52,13 +52,14 @@ function ContactChip({
 export default function TransferScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { selectedCard, addTransaction, cards } = useWallet();
+  const { profile, doTransfer, walletBalance, hideBalance } = useWallet();
   const [activeTab, setActiveTab] = useState<Tab>("send");
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState("");
 
   const successScale = useRef(new Animated.Value(0)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -67,58 +68,63 @@ export default function TransferScreen() {
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
   const handleSend = async () => {
-    if (!recipient.trim() || !amount.trim() || !selectedCard) return;
+    if (!recipient.trim() || !amount.trim()) return;
+    
+    // Validate email format
+    if (!recipient.includes("@")) {
+      setError("Please enter a valid email address");
+      return;
+    }
+    
+    setError("");
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSending(true);
-    await new Promise((r) => setTimeout(r, 1800));
+    
+    try {
+      const amountNum = parseFloat(amount.replace(/,/g, "")) || 0;
+      await doTransfer(recipient.trim(), amountNum, note.trim() || "Transfer");
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSending(false);
+      setDone(true);
 
-    const amountNum = parseFloat(amount.replace(/,/g, "")) || 0;
-    addTransaction({
-      merchantName: recipient.trim(),
-      amount: amountNum,
-      date: new Date().toISOString(),
-      status: "success",
-      type: "sent",
-      category: "transfer",
-      cardId: selectedCard.id,
-    });
+      Animated.parallel([
+        Animated.spring(successScale, {
+          toValue: 1,
+          damping: 12,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successOpacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSending(false);
-    setDone(true);
+      await new Promise((r) => setTimeout(r, 2500));
+      setDone(false);
 
-    Animated.parallel([
-      Animated.spring(successScale, {
-        toValue: 1,
-        damping: 12,
-        useNativeDriver: true,
-      }),
-      Animated.timing(successOpacity, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start();
+      Animated.parallel([
+        Animated.timing(successScale, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successOpacity, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
 
-    await new Promise((r) => setTimeout(r, 2500));
-    setDone(false);
-
-    Animated.parallel([
-      Animated.timing(successScale, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(successOpacity, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    setRecipient("");
-    setAmount("");
-    setNote("");
+      setRecipient("");
+      setAmount("");
+      setNote("");
+    } catch (err: any) {
+      setSending(false);
+      setError(err.message || "Transfer failed");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    }
   };
 
   const myId = "+250 788 555 999";
@@ -184,17 +190,25 @@ export default function TransferScreen() {
             {/* Recipient */}
             <View style={[styles.field, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>
-                To (Name or Phone)
+                To (Email Address)
               </Text>
               <TextInput
                 style={[styles.fieldInput, { color: colors.foreground }]}
                 value={recipient}
                 onChangeText={setRecipient}
-                placeholder="e.g. +250 788 ..."
+                placeholder="e.g. user@example.com"
                 placeholderTextColor={colors.mutedForeground}
-                keyboardType="default"
+                keyboardType="email-address"
+                autoCapitalize="none"
               />
             </View>
+
+            {error && (
+              <View style={[styles.errorBox, { backgroundColor: `${colors.destructive}15` }]}>
+                <Feather name="alert-circle" size={14} color={colors.destructive} />
+                <Text style={[styles.errorText, { color: colors.destructive }]}>{error}</Text>
+              </View>
+            )}
 
             {/* Amount */}
             <View style={[styles.field, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -225,15 +239,13 @@ export default function TransferScreen() {
               />
             </View>
 
-            {/* Card from */}
-            {selectedCard && (
-              <View style={[styles.fromCard, { backgroundColor: colors.muted }]}>
-                <Feather name="credit-card" size={16} color={colors.primary} />
-                <Text style={[styles.fromCardText, { color: colors.foreground }]}>
-                  From: {selectedCard.bank} ···{selectedCard.cardNumber.slice(-4)}
-                </Text>
-              </View>
-            )}
+            {/* Wallet balance info */}
+            <View style={[styles.fromCard, { backgroundColor: colors.muted }]}>
+              <Feather name="credit-card" size={16} color={colors.primary} />
+              <Text style={[styles.fromCardText, { color: colors.foreground }]}>
+                From Wallet: {hideBalance ? "••••" : walletBalance.toLocaleString()} RWF
+              </Text>
+            </View>
 
             {/* Success overlay */}
             {done && (
@@ -319,9 +331,9 @@ export default function TransferScreen() {
 
             <View style={[styles.idBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <Text style={[styles.idLabel, { color: colors.mutedForeground }]}>
-                Your Rwanda Pay ID
+                Your Email (Rwanda Pay ID)
               </Text>
-              <Text style={[styles.idValue, { color: colors.foreground }]}>{myId}</Text>
+              <Text style={[styles.idValue, { color: colors.foreground }]}>{profile.email}</Text>
             </View>
 
             <Pressable
@@ -434,6 +446,19 @@ const styles = StyleSheet.create({
   fromCardText: {
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+  },
+  errorBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    flex: 1,
   },
   successOverlay: {
     borderRadius: 16,

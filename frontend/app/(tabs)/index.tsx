@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
-import { router } from "expo-router";
-import React, { useRef, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   FlatList,
@@ -16,15 +16,15 @@ import CardView from "@/components/CardView";
 import TransactionRow from "@/components/TransactionRow";
 import { Card, useWallet } from "@/context/WalletContext";
 import { useColors } from "@/hooks/useColors";
+import { notificationsApi } from "@/lib/api";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH = SCREEN_WIDTH - 48;
 
 const QUICK_ACTIONS = [
   { icon: "wifi", label: "Pay", route: "/(tabs)/pay" as const, primary: true },
-  { icon: "send", label: "Send", route: "/send" as const, primary: false },
-  { icon: "download", label: "Receive", route: "/receive" as const, primary: false },
   { icon: "arrow-down-circle", label: "Top Up", route: "/topup" as const, primary: false },
+  { icon: "credit-card", label: "Add Card", route: "/add-card" as const, primary: false },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -84,14 +84,34 @@ export default function HomeScreen() {
     setSelectedCardId,
     hideBalance,
     toggleHideBalance,
-    notificationCount,
-    clearNotifications,
     profile,
   } = useWallet();
 
   const [activeIndex, setActiveIndex] = useState(0);
+  const [notificationCount, setNotificationCount] = useState(0);
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  // Fetch unread notification count
+  const fetchNotifCount = useCallback(async () => {
+    try {
+      const { count } = await notificationsApi.getUnreadCount();
+      setNotificationCount(count);
+    } catch {}
+  }, []);
+
+  // Refresh count when screen is focused
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifCount();
+    }, [fetchNotifCount])
+  );
+
+  // Poll every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(fetchNotifCount, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifCount]);
 
   const recentTx = transactions.slice(0, 4);
 
@@ -128,13 +148,9 @@ export default function HomeScreen() {
   );
 
   return (
-    <ScrollView
-      style={[styles.screen, { backgroundColor: colors.background }]}
-      contentContainerStyle={{ paddingBottom: bottomPad + 90 }}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Top bar */}
-      <View style={[styles.topBar, { paddingTop: topPad + 12 }]}>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      {/* Top bar - Fixed */}
+      <View style={[styles.topBar, { paddingTop: topPad + 12, backgroundColor: colors.background }]}>
         <View style={styles.topLeft}>
           <Pressable
             style={[styles.avatar, { backgroundColor: colors.primary }]}
@@ -149,9 +165,7 @@ export default function HomeScreen() {
         </View>
         <Pressable
           style={styles.notifWrap}
-          onPress={() => {
-            clearNotifications();
-          }}
+          onPress={() => router.push("/notifications")}
         >
           <Feather name="bell" size={22} color={colors.foreground} />
           {notificationCount > 0 && (
@@ -161,6 +175,13 @@ export default function HomeScreen() {
           )}
         </Pressable>
       </View>
+
+      {/* Scrollable content */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: bottomPad + 90 }}
+        showsVerticalScrollIndicator={false}
+      >
 
       {/* Total balance */}
       <View style={styles.balanceRow}>
@@ -286,12 +307,14 @@ export default function HomeScreen() {
           ))
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
+  scrollView: { flex: 1 },
   topBar: {
     flexDirection: "row",
     justifyContent: "space-between",

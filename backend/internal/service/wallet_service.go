@@ -45,6 +45,7 @@ type WalletService struct {
 	merchantRepo     repository.MerchantRepository
 	userMerchantRepo repository.UserMerchantRepository
 	txRepo           repository.TransactionRepository
+	notifSvc         *NotificationService
 }
 
 func NewWalletService(
@@ -54,6 +55,7 @@ func NewWalletService(
 	merchantRepo repository.MerchantRepository,
 	userMerchantRepo repository.UserMerchantRepository,
 	txRepo repository.TransactionRepository,
+	notifSvc *NotificationService,
 ) *WalletService {
 	return &WalletService{
 		walletRepo:       walletRepo,
@@ -62,6 +64,7 @@ func NewWalletService(
 		merchantRepo:     merchantRepo,
 		userMerchantRepo: userMerchantRepo,
 		txRepo:           txRepo,
+		notifSvc:         notifSvc,
 	}
 }
 
@@ -119,6 +122,11 @@ func (s *WalletService) Topup(ctx context.Context, in TopupInput) (*WalletResult
 	}
 	if err := s.txRepo.Create(ctx, tx); err != nil {
 		return nil, fmt.Errorf("record topup transaction: %w", err)
+	}
+
+	// Send notification
+	if s.notifSvc != nil {
+		_ = s.notifSvc.NotifyTopupSuccess(ctx, in.UserID, in.Amount, tx.ID)
 	}
 
 	return &WalletResult{Transaction: tx, Balance: newWalletBalance}, nil
@@ -196,6 +204,12 @@ func (s *WalletService) Transfer(ctx context.Context, in TransferInput) (*Wallet
 		return nil, fmt.Errorf("record receive transaction: %w", err)
 	}
 
+	// Send notifications
+	if s.notifSvc != nil {
+		_ = s.notifSvc.NotifyPaymentSent(ctx, in.SenderID, recipient.Name, in.Amount, senderTx.ID)
+		_ = s.notifSvc.NotifyPaymentReceived(ctx, recipient.ID, senderName, in.Amount, recipientTx.ID)
+	}
+
 	return &WalletResult{Transaction: senderTx, Balance: newSenderBalance}, nil
 }
 
@@ -244,6 +258,19 @@ func (s *WalletService) Pay(ctx context.Context, in PayInput) (*WalletResult, er
 
 	if err := s.txRepo.Create(ctx, tx); err != nil {
 		return nil, fmt.Errorf("record payment transaction: %w", err)
+	}
+
+	// Send notification
+	if s.notifSvc != nil {
+		merchantName := "Merchant"
+		if tx.MerchantID != nil {
+			if merchant, err := s.merchantRepo.GetByID(ctx, *tx.MerchantID); err == nil {
+				merchantName = merchant.Name
+			}
+		} else {
+			merchantName = in.Description
+		}
+		_ = s.notifSvc.NotifyPaymentSuccess(ctx, in.UserID, merchantName, in.Amount, tx.ID)
 	}
 
 	return &WalletResult{Transaction: tx, Balance: newBalance}, nil

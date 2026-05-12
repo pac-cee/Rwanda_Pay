@@ -3,13 +3,12 @@
     "1": {
       "Name": "Rwanda Pay DB",
       "Group": "Servers",
-      "Host": "postgres",
+      "Host": "db",
       "Port": 5432,
-      "MaintenanceDB": "rwanda_pay",
-      "Username": "admin",
-      "Password": "admin",
+      "MaintenanceDB": "rwandapay",
+      "Username": "rwandapay",
       "SSLMode": "prefer",
-      "SavePassword": true
+      "Comment": "Rwanda Pay database - Password: rwandapay_secure_2026"
     }
   }
 }

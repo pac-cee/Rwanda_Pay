@@ -29,43 +29,105 @@ export default function TabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
-            <BlurView intensity={100} tint={isDark ? "dark" : "light"} style={StyleSheet.absoluteFill} />
+            <BlurView 
+              intensity={80} 
+              tint={isDark ? "dark" : "light"} 
+              style={StyleSheet.absoluteFill}
+            />
           ) : isWeb ? (
             <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background }]} />
           ) : null,
-        tabBarLabelStyle: { fontFamily: "Inter_500Medium", fontSize: 10 },
+        tabBarLabelStyle: { 
+          fontFamily: "Inter_500Medium", 
+          fontSize: 10,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="house.fill" tintColor={color} size={24} /> : <Feather name="home" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView 
+                name={focused ? "house.fill" : "house"} 
+                tintColor={color} 
+                size={24}
+                animationSpec={{
+                  effect: {
+                    type: "bounce",
+                  },
+                }}
+              />
+            ) : (
+              <Feather name="home" size={22} color={color} />
+            ),
         }}
       />
       <Tabs.Screen
         name="pay"
         options={{
           title: "Pay",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="wave.3.right" tintColor={color} size={24} /> : <Feather name="wifi" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView 
+                name={focused ? "wave.3.right" : "wave.3.right"} 
+                tintColor={color} 
+                size={24}
+                animationSpec={{
+                  effect: {
+                    type: "pulse",
+                  },
+                }}
+              />
+            ) : (
+              <Feather name="wifi" size={22} color={color} />
+            ),
         }}
       />
       <Tabs.Screen
         name="transfer"
         options={{
           title: "Transfer",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="arrow.left.arrow.right" tintColor={color} size={24} /> : <Feather name="send" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView 
+                name={focused ? "arrow.left.arrow.right" : "arrow.left.arrow.right"} 
+                tintColor={color} 
+                size={24}
+                animationSpec={{
+                  effect: {
+                    type: "bounce",
+                  },
+                }}
+              />
+            ) : (
+              <Feather name="send" size={22} color={color} />
+            ),
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ color }) =>
-            isIOS ? <SymbolView name="gearshape.fill" tintColor={color} size={24} /> : <Feather name="settings" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) =>
+            isIOS ? (
+              <SymbolView 
+                name={focused ? "gearshape.fill" : "gearshape"} 
+                tintColor={color} 
+                size={24}
+                animationSpec={{
+                  effect: {
+                    type: "bounce",
+                  },
+                }}
+              />
+            ) : (
+              <Feather name="settings" size={22} color={color} />
+            ),
         }}
       />
       <Tabs.Screen name="transactions" options={{ href: null }} />

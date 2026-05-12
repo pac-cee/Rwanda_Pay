@@ -13,7 +13,6 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import CardView from "@/components/CardView";
 import PaymentAnimation, { PaymentStatus } from "@/components/PaymentAnimation";
 import { useWallet } from "@/context/WalletContext";
 import { useColors } from "@/hooks/useColors";
@@ -180,59 +179,24 @@ const authStyles = StyleSheet.create({
 export default function PayScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { selectedCard, addTransaction, hideBalance } = useWallet();
+  const { selectedCard, cards, walletBalance, doPay, doTopup, hideBalance } = useWallet();
   const [flow, setFlow] = useState<FlowState>("idle");
   const [merchant, setMerchant] = useState("");
   const [amount, setAmount] = useState("");
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [paymentSource, setPaymentSource] = useState<"wallet" | "card">("wallet");
+  const [selectedPayCardId, setSelectedPayCardId] = useState<string | null>(null);
   const autoScanTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const rippleLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
 
-  const cardColor = selectedCard?.color ?? colors.primary;
-
-  // Ripple animation for terminal detected
-  const rippleScale = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    if (flow === "terminal_found") {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(rippleScale, {
-            toValue: 1.08,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-          Animated.timing(rippleScale, {
-            toValue: 1,
-            duration: 500,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      rippleLoopRef.current = loop;
-      loop.start();
-    } else {
-      if (rippleLoopRef.current) {
-        rippleLoopRef.current.stop();
-        rippleLoopRef.current = null;
-      }
-      Animated.timing(rippleScale, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-
-    return () => {
-      if (rippleLoopRef.current) {
-        rippleLoopRef.current.stop();
-        rippleLoopRef.current = null;
-      }
-    };
-  }, [flow]);
+  const selectedPayCard = cards.find((c) => c.id === selectedPayCardId);
+  
+  // Dynamic color based on payment source
+  const activeColor = paymentSource === "wallet" 
+    ? colors.primary 
+    : (selectedPayCard?.color ?? colors.primary);
 
   const animStatus: PaymentStatus =
     flow === "idle"
@@ -303,19 +267,18 @@ export default function PayScreen() {
     const amountNum = parseFloat(amount.replace(/,/g, "")) || Math.floor(Math.random() * 20000) + 2000;
     const merchantName = merchant.trim() || "Rwanda Merchant";
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setFlow("success");
-
-    if (selectedCard) {
-      addTransaction({
-        merchantName,
-        amount: amountNum,
-        date: new Date().toISOString(),
-        status: "success",
-        type: "payment",
-        category: "shopping",
-        cardId: selectedCard.id,
-      });
+    try {
+      // If paying with card, first top up wallet from card, then pay
+      if (paymentSource === "card" && selectedPayCardId) {
+        await doTopup(selectedPayCardId, amountNum);
+      }
+      
+      await doPay(amountNum, merchantName, "shopping", true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setFlow("success");
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setFlow("failed");
     }
 
     setTimeout(() => {
@@ -357,27 +320,100 @@ export default function PayScreen() {
             {STATUS_MESSAGES[flow]}
           </Text>
 
-          {/* Card */}
-          {selectedCard ? (
-            <Animated.View
-              style={[
-                styles.cardWrap,
-                isTerminalFound && {
-                  transform: [{ scale: rippleScale }],
-                },
-              ]}
-            >
-              <CardView card={selectedCard} isSelected hideBalance={hideBalance} />
-            </Animated.View>
-          ) : (
-            <View style={[styles.noCard, { backgroundColor: colors.muted }]}>
-              <Text style={[styles.noCardText, { color: colors.mutedForeground }]}>No card selected</Text>
+          {/* Payment source selector */}
+          {isIdle && (
+            <View style={styles.sourceSelector}>
+              <Pressable
+                style={[
+                  styles.sourceBtn,
+                  { backgroundColor: paymentSource === "wallet" ? colors.primary : colors.card, borderColor: colors.border },
+                ]}
+                onPress={() => setPaymentSource("wallet")}
+              >
+                <Feather name="credit-card" size={18} color={paymentSource === "wallet" ? "#FFF" : colors.foreground} />
+                <Text style={[styles.sourceText, { color: paymentSource === "wallet" ? "#FFF" : colors.foreground }]}>
+                  Wallet
+                </Text>
+                <Text style={[styles.sourceBalance, { color: paymentSource === "wallet" ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
+                  {hideBalance ? "••••" : walletBalance.toLocaleString()} RWF
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.sourceBtn,
+                  { backgroundColor: paymentSource === "card" ? colors.primary : colors.card, borderColor: colors.border },
+                ]}
+                onPress={() => setPaymentSource("card")}
+              >
+                <Feather name="credit-card" size={18} color={paymentSource === "card" ? "#FFF" : colors.foreground} />
+                <Text style={[styles.sourceText, { color: paymentSource === "card" ? "#FFF" : colors.foreground }]}>
+                  Card
+                </Text>
+              </Pressable>
             </View>
+          )}
+
+          {/* Card display - wallet balance or selected card */}
+          {paymentSource === "wallet" ? (
+            <View style={[styles.walletCard, { backgroundColor: colors.primary }]}>
+              <View style={styles.walletHeader}>
+                <Feather name="credit-card" size={24} color="rgba(255,255,255,0.9)" />
+                <Text style={styles.walletLabel}>Rwanda Pay Wallet</Text>
+              </View>
+              <Text style={styles.walletBalance}>
+                {hideBalance ? "•••••••" : walletBalance.toLocaleString("en-RW")}
+                <Text style={styles.walletCurrency}> RWF</Text>
+              </Text>
+              <Text style={styles.walletSub}>Available Balance</Text>
+            </View>
+          ) : (
+            selectedPayCard && (
+              <View style={styles.cardWrap}>
+                <View style={[styles.miniCard, { backgroundColor: selectedPayCard.color }]}>
+                  <View style={styles.miniCardTop}>
+                    <Text style={styles.miniCardBank}>{selectedPayCard.bank}</Text>
+                    <Feather name="credit-card" size={20} color="rgba(255,255,255,0.8)" />
+                  </View>
+                  <Text style={styles.miniCardNumber}>{selectedPayCard.cardNumber}</Text>
+                  <View style={styles.miniCardBottom}>
+                    <Text style={styles.miniCardHolder}>{selectedPayCard.holderName}</Text>
+                    <Text style={styles.miniCardExpiry}>{selectedPayCard.expiry}</Text>
+                  </View>
+                </View>
+              </View>
+            )
+          )}
+
+          {/* Card selection (only if card source) */}
+          {isIdle && paymentSource === "card" && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cardsRow}
+            >
+              {cards.map((card) => (
+                <Pressable
+                  key={card.id}
+                  style={[
+                    styles.cardChip,
+                    { borderColor: selectedPayCardId === card.id ? colors.primary : colors.border, backgroundColor: colors.card },
+                  ]}
+                  onPress={() => setSelectedPayCardId(card.id)}
+                >
+                  <View style={[styles.cardDot, { backgroundColor: card.color }]} />
+                  <View>
+                    <Text style={[styles.cardChipName, { color: colors.foreground }]}>{card.bank}</Text>
+                    <Text style={[styles.cardChipLast4, { color: colors.mutedForeground }]}>••{card.cardNumber.slice(-4)}</Text>
+                  </View>
+                  {selectedPayCardId === card.id && <Feather name="check-circle" size={16} color={colors.primary} />}
+                </Pressable>
+              ))}
+            </ScrollView>
           )}
 
           {/* NFC animation */}
           <View style={styles.animWrap}>
-            <PaymentAnimation status={animStatus} color={cardColor} />
+            <PaymentAnimation status={animStatus} color={activeColor} />
           </View>
 
           {/* Terminal found indicator */}
@@ -440,13 +476,16 @@ export default function PayScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.mainBtn,
-                { backgroundColor: selectedCard ? cardColor : colors.muted, opacity: pressed ? 0.8 : 1 },
+                { 
+                  backgroundColor: (paymentSource === "wallet" || selectedPayCardId) ? activeColor : colors.muted, 
+                  opacity: pressed ? 0.8 : 1 
+                },
               ]}
               onPress={startScan}
-              disabled={!selectedCard}
+              disabled={paymentSource === "card" && !selectedPayCardId}
             >
-              <Feather name="wifi" size={20} color={selectedCard ? "#FFF" : colors.mutedForeground} />
-              <Text style={[styles.mainBtnText, { color: selectedCard ? "#FFF" : colors.mutedForeground }]}>
+              <Feather name="wifi" size={20} color={(paymentSource === "wallet" || selectedPayCardId) ? "#FFF" : colors.mutedForeground} />
+              <Text style={[styles.mainBtnText, { color: (paymentSource === "wallet" || selectedPayCardId) ? "#FFF" : colors.mutedForeground }]}>
                 Start Scanning
               </Text>
             </Pressable>
@@ -463,7 +502,7 @@ export default function PayScreen() {
 
           {isTerminalFound && (
             <Pressable
-              style={({ pressed }) => [styles.mainBtn, { backgroundColor: cardColor, opacity: pressed ? 0.8 : 1 }]}
+              style={({ pressed }) => [styles.mainBtn, { backgroundColor: activeColor, opacity: pressed ? 0.8 : 1 }]}
               onPress={handleTerminalTap}
             >
               <Feather name="lock" size={20} color="#FFF" />
@@ -493,7 +532,7 @@ export default function PayScreen() {
           setShowAuthModal(false);
           handleAuth(false);
         }}
-        cardColor={cardColor}
+        cardColor={activeColor}
       />
     </View>
   );
@@ -504,9 +543,48 @@ const styles = StyleSheet.create({
   content: { alignItems: "center", paddingHorizontal: 24, gap: 18 },
   title: { fontSize: 28, fontFamily: "Inter_700Bold", alignSelf: "flex-start" },
   status: { fontSize: 14, fontFamily: "Inter_400Regular", alignSelf: "flex-start", marginTop: -10 },
+  sourceSelector: { flexDirection: "row", width: "100%", gap: 10 },
+  sourceBtn: { flex: 1, padding: 16, borderRadius: 16, borderWidth: 1, gap: 4 },
+  sourceText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sourceBalance: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  walletCard: {
+    width: "100%",
+    borderRadius: 20,
+    padding: 24,
+    gap: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  walletHeader: { flexDirection: "row", alignItems: "center", gap: 10 },
+  walletLabel: { color: "rgba(255,255,255,0.9)", fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  walletBalance: { color: "#FFF", fontSize: 36, fontFamily: "Inter_700Bold", marginTop: 8 },
+  walletCurrency: { fontSize: 18, fontFamily: "Inter_400Regular" },
+  walletSub: { color: "rgba(255,255,255,0.7)", fontSize: 12, fontFamily: "Inter_400Regular" },
   cardWrap: { width: "100%" },
-  noCard: { width: "100%", height: 120, borderRadius: 20, alignItems: "center", justifyContent: "center" },
-  noCardText: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  miniCard: {
+    borderRadius: 20,
+    padding: 20,
+    gap: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  miniCardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  miniCardBank: { color: "#FFF", fontSize: 16, fontFamily: "Inter_700Bold" },
+  miniCardNumber: { color: "rgba(255,255,255,0.95)", fontSize: 18, fontFamily: "Inter_600SemiBold", letterSpacing: 2 },
+  miniCardBottom: { flexDirection: "row", justifyContent: "space-between" },
+  miniCardHolder: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontFamily: "Inter_500Medium", textTransform: "uppercase" },
+  miniCardExpiry: { color: "rgba(255,255,255,0.85)", fontSize: 12, fontFamily: "Inter_500Medium" },
+  cardsRow: { gap: 10, paddingRight: 4, paddingVertical: 4 },
+  cardChip: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5 },
+  cardDot: { width: 10, height: 10, borderRadius: 5 },
+  cardChipName: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  cardChipLast4: { fontSize: 11, fontFamily: "Inter_400Regular" },
   animWrap: { alignItems: "center", justifyContent: "center", marginVertical: 4 },
   terminalBox: {
     flexDirection: "row",

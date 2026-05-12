@@ -97,6 +97,17 @@ export interface ApiTransaction {
   created_at: string;
 }
 
+export interface ApiNotification {
+  id: string;
+  user_id: string;
+  type: "payment_received" | "payment_sent" | "topup_success" | "card_added" | "payment_success" | "payment_failed" | "system";
+  title: string;
+  message: string;
+  transaction_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
 // ── Auth API ───────────────────────────────────────────────────────────────
 
 export const authApi = {
@@ -177,4 +188,21 @@ export const transactionsApi = {
       total_out: number;
       days: number;
     }>(`/transactions/analytics?period=${period}`),
+};
+
+// ── Notifications API ──────────────────────────────────────────────────────
+
+export const notificationsApi = {
+  list: (params?: { limit?: number; offset?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.limit !== undefined) q.set("limit", String(params.limit));
+    if (params?.offset !== undefined) q.set("offset", String(params.offset));
+    return request<{ notifications: ApiNotification[]; total: number; limit: number; offset: number }>(
+      `/notifications?${q.toString()}`
+    );
+  },
+  getUnreadCount: () => request<{ count: number }>("/notifications/unread-count"),
+  markAsRead: (id: string) => request<{ success: boolean }>(`/notifications/${id}/read`, { method: "PUT" }),
+  markAllAsRead: () => request<{ success: boolean }>("/notifications/read-all", { method: "PUT" }),
+  delete: (id: string) => request<{ success: boolean }>(`/notifications/${id}`, { method: "DELETE" }),
 };

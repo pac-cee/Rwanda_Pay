@@ -4,224 +4,308 @@
 
 ---
 
-## The Problem
-
-In Rwanda, contactless payment services like **Apple Pay** and **Google Pay** are not available. Rwandans rely on cash, manual mobile money transfers (MTN MoMo, Airtel Money), or physical card swipes — all of which are slow, require network USSD menus, or depend on merchant POS hardware.
-
-There is no unified, smartphone-native wallet that lets a Rwandan user:
-- Hold a digital balance in RWF
-- Link multiple bank cards and mobile money accounts
-- Tap to pay at a merchant instantly
-- Send money to another person by email in seconds
-- Track spending with analytics
-
-**Rwanda Pay** is that solution.
-
----
-
-## What It Does
-
-| Feature | Description |
-|---|---|
-| Digital Wallet | Hold RWF balance, top up from linked cards |
-| Tap-to-Pay | NFC-simulated payment with biometric (Face ID / fingerprint) auth |
-| Send Money | Transfer RWF to any registered user by email |
-| Receive Money | Generate receive request, view incoming transfers |
-| Card Management | Link Visa, Mastercard, Amex, MTN MoMo cards |
-| Transaction History | Full history with date grouping and type filtering |
-| Spending Analytics | Weekly/monthly charts, category breakdown |
-| Demo Account | One-tap demo with seeded data — no signup needed |
-| Security | JWT auth, bcrypt passwords, biometric payment gate |
-
----
-
-## Tech Stack
-
-### Mobile App (`artifacts/rwanda-pay`)
-| Layer | Technology |
-|---|---|
-| Framework | Expo 54 + React Native 0.81 |
-| Navigation | Expo Router v6 (file-based) |
-| State | React Context (AuthContext, WalletContext) |
-| Data Fetching | TanStack React Query |
-| Animations | React Native Reanimated 4 |
-| Token Storage | expo-secure-store |
-| Local Persistence | AsyncStorage |
-| Biometrics | expo-local-authentication |
-| UI | Custom components, Inter font, React Native SVG |
-| Language | TypeScript 5.9 |
-
-### Backend (`artifacts/api-server`)
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js 24 |
-| Framework | Express 5 |
-| Database | SQLite via better-sqlite3 (dev) / PostgreSQL (prod) |
-| ORM | Drizzle ORM |
-| Auth | JWT (jsonwebtoken) + bcryptjs |
-| Validation | Zod |
-| Logging | Pino + pino-http |
-| Build | esbuild (ESM bundle) |
-| Language | TypeScript 5.9 |
-
-### Monorepo
-| Tool | Purpose |
-|---|---|
-| pnpm workspaces | Package management |
-| `@workspace/db` | Shared Drizzle schema + Zod validators |
-| `@workspace/api-zod` | Generated Zod types from OpenAPI spec |
-| `@workspace/api-client-react` | Generated React Query hooks |
-
----
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 Rwanda-Pay/
-├── artifacts/
-│   ├── rwanda-pay/          # Expo mobile app
-│   │   ├── app/             # Expo Router screens
-│   │   │   ├── (tabs)/      # Bottom tab screens
-│   │   │   ├── auth.tsx     # Login / Register
-│   │   │   ├── topup.tsx    # Top-up modal
-│   │   │   ├── send.tsx     # Send money modal
-│   │   │   └── receive.tsx  # Receive modal
-│   │   ├── components/      # Reusable UI components
-│   │   ├── context/         # AuthContext, WalletContext
-│   │   ├── hooks/           # useColors, custom hooks
-│   │   └── lib/             # api.ts (HTTP client)
-│   └── api-server/          # Express REST API
-│       └── src/
-│           ├── routes/      # auth, wallet, cards, transactions
-│           ├── middlewares/  # requireAuth
-│           └── lib/         # jwt, logger
-├── lib/
-│   ├── db/                  # Drizzle schema (users, wallets, cards, transactions)
-│   ├── api-spec/            # OpenAPI YAML
-│   ├── api-zod/             # Generated Zod types
-│   └── api-client-react/    # Generated React Query hooks
-├── docs/                    # Full project documentation
-└── docker-compose.yml       # Docker setup
+├── backend/              # Go REST API server
+│   ├── cmd/             # Application entry points
+│   ├── internal/        # Private application code
+│   ├── pkg/             # Public libraries
+│   ├── tests/           # Go tests
+│   └── Dockerfile       # Backend container
+│
+├── frontend/            # React Native mobile app (Expo)
+│   ├── app/            # Expo Router screens
+│   ├── components/     # Reusable UI components
+│   ├── context/        # React Context (state management)
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # API client
+│   └── package.json    # Frontend dependencies
+│
+├── database/           # Database initialization scripts
+│   └── init.sql       # PostgreSQL schema
+│
+├── docs/              # Complete project documentation
+│   ├── 01-requirements.md
+│   ├── 02-srs.md
+│   ├── 03-uml-diagrams.md
+│   ├── 04-system-design.md
+│   ├── 05-prototype-patterns.md
+│   ├── 06-docker.md
+│   └── 07-testing.md
+│
+└── docker-compose.yml  # Docker orchestration
 ```
 
 ---
 
-## API Endpoints
-
-Base URL: `http://localhost:8080/api`
-
-All protected routes require: `Authorization: Bearer <token>`
-
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| POST | `/auth/register` | — | Register, creates wallet + 3 seed cards |
-| POST | `/auth/login` | — | Login, returns JWT |
-| GET | `/auth/me` | ✓ | Current user + balance |
-| PUT | `/auth/profile` | ✓ | Update name/phone |
-| POST | `/auth/logout` | ✓ | Logout |
-| GET | `/wallet` | ✓ | Get balance |
-| POST | `/wallet/topup` | ✓ | Top up from card |
-| POST | `/wallet/transfer` | ✓ | Send to another user |
-| POST | `/wallet/pay` | ✓ | NFC payment |
-| GET | `/cards` | ✓ | List cards |
-| POST | `/cards` | ✓ | Add card |
-| DELETE | `/cards/:id` | ✓ | Delete card |
-| PUT | `/cards/:id/default` | ✓ | Set default card |
-| GET | `/transactions` | ✓ | List (paginated + filtered) |
-| GET | `/transactions/analytics` | ✓ | Spending analytics |
-| GET | `/healthz` | — | Health check |
-
----
-
-## Running Locally
+## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 24+
-- pnpm (`npm install -g pnpm`)
 
-### 1. Install dependencies
+- **Docker & Docker Compose** (for backend)
+- **Node.js 24+** and **pnpm** (for frontend)
+- **Go 1.21+** (for backend development)
+- **Xcode** (for iOS) or **Android Studio** (for Android)
+
+### 1. Start Backend with Docker
+
 ```bash
+# Start PostgreSQL + Go API
+docker-compose up -d
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f backend
+```
+
+The API will be available at `http://localhost:8080`
+
+### 2. Run Mobile App
+
+```bash
+# Navigate to frontend
+cd frontend
+
+# Install dependencies
 pnpm install
-pnpm approve-builds   # approve better-sqlite3 native build
+
+# Start Expo dev server
+pnpm run dev
+
+# Press 'i' for iOS Simulator
+# Press 'a' for Android Emulator
+# Scan QR code with Expo Go app
 ```
 
-### 2. Push database schema
+---
+
+## 🔧 Development
+
+### Backend (Go)
+
 ```bash
-pnpm --filter @workspace/db run push
+cd backend
+
+# Install dependencies
+go mod download
+
+# Run locally (without Docker)
+go run cmd/server/main.go
+
+# Run tests
+go test ./...
+
+# Build
+go build -o bin/server cmd/server/main.go
 ```
 
-### 3. Start the API server (Terminal 1)
+### Frontend (React Native)
+
 ```bash
-pnpm --filter @workspace/api-server run dev
-# Runs on http://localhost:8080
+cd frontend
+
+# Install dependencies
+pnpm install
+
+# Start development server
+pnpm run dev
+
+# Clear cache
+pnpm run dev --clear
 ```
 
-### 4. Create a demo account
+---
+
+## 🧪 Testing
+
+### Backend Tests
+
+```bash
+cd backend
+go test ./tests/... -v
+```
+
+### API Health Check
+
+```bash
+curl http://localhost:8080/api/healthz
+```
+
+### Create Test User
+
 ```bash
 curl -X POST http://localhost:8080/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{"email":"demo@rwandapay.com","password":"demo1234","name":"Demo User"}'
-```
-
-### 5. Start the mobile app (Terminal 2)
-```bash
-pnpm --filter @workspace/rwanda-pay run dev
-# Press i for iOS Simulator, a for Android, scan QR for Expo Go
+  -d '{
+    "email": "test@rwandapay.com",
+    "password": "test1234",
+    "name": "Test User"
+  }'
 ```
 
 ---
 
-## Running with Docker
+## 📱 Mobile App Configuration
 
-```bash
-docker-compose up --build
+Update `frontend/.env` with your backend URL:
+
+```env
+# For iOS Simulator / Android Emulator
+EXPO_PUBLIC_DOMAIN=localhost:8080
+
+# For physical device (use your machine's IP)
+EXPO_PUBLIC_DOMAIN=192.168.x.x:8080
 ```
 
-See [docs/06-docker.md](./docs/06-docker.md) for full details.
+To find your IP:
+```bash
+# macOS/Linux
+ipconfig getifaddr en0
+
+# Windows
+ipconfig | findstr IPv4
+```
 
 ---
 
-## Documentation
+## 🐳 Docker Commands
+
+```bash
+# Start all services
+docker-compose up -d
+
+# Stop all services
+docker-compose down
+
+# Rebuild and start
+docker-compose up --build -d
+
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f db
+
+# Execute commands in containers
+docker-compose exec backend sh
+docker-compose exec db psql -U rwandapay -d rwandapay
+```
+
+---
+
+## 📚 Documentation
 
 | Document | Description |
 |---|---|
-| [Phase 1 — Requirements & Analysis](./docs/01-requirements.md) | Problem statement, functional & non-functional requirements |
-| [Phase 1 — SRS](./docs/02-srs.md) | Full Software Requirements Specification |
-| [Phase 1 — UML Diagrams](./docs/03-uml-diagrams.md) | Use case, class, activity, sequence, component diagrams |
-| [Phase 1 — System Design](./docs/04-system-design.md) | Architecture, data flow, ERD, deployment |
-| [Phase 2 — Prototype & Design Patterns](./docs/05-prototype-patterns.md) | Design patterns used, coding standards |
-| [Phase 3 — Docker & Version Control](./docs/06-docker.md) | Dockerization process, Git VCS setup |
-| [Phase 4 — Test Plan](./docs/07-testing.md) | Full software test plan |
+| [Requirements & Analysis](./docs/01-requirements.md) | Problem statement, functional requirements |
+| [Software Requirements Specification](./docs/02-srs.md) | Complete SRS document |
+| [UML Diagrams](./docs/03-uml-diagrams.md) | Use case, class, sequence diagrams |
+| [System Design](./docs/04-system-design.md) | Architecture, data flow, ERD |
+| [Design Patterns](./docs/05-prototype-patterns.md) | Patterns used, coding standards |
+| [Docker & VCS](./docs/06-docker.md) | Dockerization, Git workflow |
+| [Testing](./docs/07-testing.md) | Test plan and results |
 
 ---
 
-## Design Patterns Used
+## 🏗️ Tech Stack
 
-| Pattern | Where Applied |
+### Backend
+- **Language:** Go 1.21+
+- **Framework:** Gin / Chi
+- **Database:** PostgreSQL 15
+- **ORM:** GORM / sqlx
+- **Auth:** JWT + bcrypt
+- **Containerization:** Docker
+
+### Frontend
+- **Framework:** React Native (Expo 54)
+- **Navigation:** Expo Router v6
+- **State:** React Context API
+- **Animations:** React Native Reanimated 4
+- **Biometrics:** expo-local-authentication
+- **Language:** TypeScript 5.9
+
+### Database
+- **Production:** PostgreSQL 15
+- **Schema:** SQL migrations
+- **Backup:** Docker volumes
+
+---
+
+## 🌟 Features
+
+| Feature | Description |
 |---|---|
-| **Repository Pattern** | `lib/db` — all DB access abstracted behind Drizzle schema |
-| **Context / Provider Pattern** | `AuthContext`, `WalletContext` — global state without prop drilling |
-| **Middleware Pattern** | `requireAuth` — Express middleware chain for JWT validation |
-| **Strategy Pattern** | Payment flow — biometric auth strategy swappable per platform |
-| **Observer Pattern** | React Query — components re-render on data change automatically |
-| **Factory Pattern** | Seed data creation on registration — factory builds user + wallet + cards + transactions |
+| 💳 Digital Wallet | Hold RWF balance, top up from linked cards |
+| 📱 Tap-to-Pay | NFC-simulated payment with biometric auth |
+| 💸 Send Money | Transfer RWF to any registered user by email |
+| 📥 Receive Money | Generate receive request, view incoming transfers |
+| 🎴 Card Management | Link Visa, Mastercard, Amex, MTN MoMo cards |
+| 📊 Transaction History | Full history with date grouping and filtering |
+| 📈 Spending Analytics | Weekly/monthly charts, category breakdown |
+| 🔒 Security | JWT auth, bcrypt passwords, biometric gate |
 
 ---
 
-## Academic Information
+## 🔐 Security
+
+- **Password Hashing:** bcrypt with cost factor 10
+- **JWT Tokens:** Signed with secret, 7-day expiry
+- **Biometric Auth:** Face ID / Fingerprint for payments
+- **Input Validation:** All inputs validated and sanitized
+- **HTTPS Only:** TLS 1.3 in production
+
+---
+
+## 📝 API Endpoints
+
+Base URL: `http://localhost:8080/api`
+
+### Authentication
+- `POST /auth/register` - Register new user
+- `POST /auth/login` - Login user
+- `GET /auth/me` - Get current user (protected)
+
+### Wallet
+- `GET /wallet` - Get balance (protected)
+- `POST /wallet/topup` - Top up wallet (protected)
+- `POST /wallet/transfer` - Send money (protected)
+- `POST /wallet/pay` - NFC payment (protected)
+
+### Cards
+- `GET /cards` - List cards (protected)
+- `POST /cards` - Add card (protected)
+- `DELETE /cards/:id` - Delete card (protected)
+
+### Transactions
+- `GET /transactions` - List transactions (protected)
+- `GET /transactions/analytics` - Spending analytics (protected)
+
+---
+
+## 🎓 Academic Information
 
 - **Course:** Best Programming Practices and Design Patterns
+- **Course Code:** SENG 8240
 - **Instructor:** RUTARINDWA JEAN PIERRE
 - **Institution:** Faculty of Information Technology — Software Engineering
-- **Student:** Pacifique (Rwanda Pay)
+- **Student:** Pacifique
+- **Academic Year:** 2025/2026
 
 ---
 
-## Version Control
+## 📄 License
 
-This project uses **Git** for version control.
+Academic Project - All Rights Reserved
 
-```bash
-git log --oneline   # view commit history
-git status          # check current changes
-```
+---
+
+## 🤝 Contributing
+
+This is an academic project. For questions or issues, please contact the project maintainer.
+
+---
+
+**Built with ❤️ in Rwanda**

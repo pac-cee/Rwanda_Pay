@@ -43,6 +43,7 @@ export default function AddCardScreen() {
   const [expiry, setExpiry] = useState("");
   const [cardType, setCardType] = useState<CardType>("visa");
   const [cardColor, setCardColor] = useState(COLOR_OPTIONS[0]);
+  const [balance, setBalance] = useState("");
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
@@ -59,6 +60,27 @@ export default function AddCardScreen() {
     return clean;
   };
 
+  const validateExpiry = (expiryStr: string): boolean => {
+    if (expiryStr.length !== 5) return false;
+    const [month, year] = expiryStr.split("/");
+    const mm = parseInt(month, 10);
+    const yy = parseInt(year, 10);
+    
+    if (mm < 1 || mm > 12) return false;
+    
+    const now = new Date();
+    const currentYear = now.getFullYear() % 100; // Get last 2 digits
+    const currentMonth = now.getMonth() + 1;
+    
+    // Card expired if year is less than current year
+    if (yy < currentYear) return false;
+    
+    // If same year, check month
+    if (yy === currentYear && mm < currentMonth) return false;
+    
+    return true;
+  };
+
   const previewCard: Card = {
     id: "preview",
     bank: bank || "Bank Name",
@@ -73,22 +95,31 @@ export default function AddCardScreen() {
     color: cardColor,
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!bank.trim() || !cardNum.trim() || !expiry.trim()) return;
+    
+    // Validate expiry date
+    if (!validateExpiry(expiry)) {
+      alert("Invalid or expired card. Please check the expiry date.");
+      return;
+    }
+    
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    addCard({
-      bank: bank.trim(),
-      holderName: holder.trim() || "Alex Mugisha",
-      cardNumber: `${cardNum.split(" ")[0]} **** **** ${cardNum.replace(/\s/g, "").slice(-4)}`,
-      expiry: expiry.trim(),
-      balance: 0,
-      type: cardType,
+    const balanceNum = parseInt(balance.replace(/[^0-9]/g, "") || "0", 10);
+    await addCard({
+      card_number: cardNum.replace(/\s/g, ""),
+      expiry_date: expiry.trim(),
+      cvv: "123",
+      holder_name: holder.trim() || "Alex Mugisha",
+      network: cardType === "momo" ? "visa" : cardType,
+      label: bank.trim(),
       color: cardColor,
+      balance: balanceNum,
     });
     router.back();
   };
 
-  const isValid = bank.trim().length > 0 && cardNum.replace(/\s/g, "").length >= 12 && expiry.length === 5;
+  const isValid = bank.trim().length > 0 && cardNum.replace(/\s/g, "").length >= 12 && expiry.length === 5 && validateExpiry(expiry);
 
   return (
     <KeyboardAvoidingView
@@ -203,6 +234,21 @@ export default function AddCardScreen() {
               placeholderTextColor={c.mutedForeground}
               keyboardType="numeric"
               maxLength={5}
+            />
+            {expiry.length === 5 && !validateExpiry(expiry) && (
+              <Text style={[styles.errorText, { color: "#EF4444" }]}>Card is expired or invalid date</Text>
+            )}
+          </View>
+
+          <View style={[styles.field, { backgroundColor: c.card, borderColor: c.border }]}>
+            <Text style={[styles.fieldLabel, { color: c.mutedForeground }]}>Card Balance (RWF)</Text>
+            <TextInput
+              style={[styles.fieldInput, { color: c.foreground }]}
+              value={balance}
+              onChangeText={(t) => setBalance(t.replace(/[^0-9]/g, ""))}
+              placeholder="e.g. 50000"
+              placeholderTextColor={c.mutedForeground}
+              keyboardType="numeric"
             />
           </View>
         </View>
@@ -330,5 +376,10 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 17,
     fontFamily: "Inter_700Bold",
+  },
+  errorText: {
+    fontSize: 11,
+    fontFamily: "Inter_500Medium",
+    marginTop: 4,
   },
 });
