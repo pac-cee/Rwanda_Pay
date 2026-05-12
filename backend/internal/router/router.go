@@ -17,6 +17,7 @@ type Handlers struct {
 	Card         *handler.CardHandler
 	Transaction  *handler.TransactionHandler
 	Notification *handler.NotificationHandler
+	Admin        *handler.AdminHandler
 }
 
 func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
@@ -89,4 +90,18 @@ func Setup(app *fiber.App, h Handlers, jwtSvc *jwt.Service) {
 
 	// Merchants (read-only for users)
 	// Future: add merchant handler
+
+	// ── Admin routes ───────────────────────────────────────────────────────────
+	admin := v1.Group("/admin", middleware.Auth(jwtSvc), middleware.AdminAuth())
+	admin.Get("/stats", h.Admin.GetStats)
+	admin.Get("/users", h.Admin.ListUsers)
+	admin.Get("/users/:id", h.Admin.GetUser)
+	admin.Delete("/users/:id", h.Admin.DeleteUser)
+	admin.Put("/users/:id", h.Admin.UpdateUser)
+	admin.Get("/transactions", h.Admin.ListTransactions)
+	admin.Get("/merchants", h.Admin.ListMerchants)
+	admin.Post("/merchants", h.Admin.CreateMerchant)
+	admin.Put("/merchants/:id", h.Admin.UpdateMerchant)
+	admin.Delete("/merchants/:id", h.Admin.DeleteMerchant)
+	admin.Get("/logs", h.Admin.GetLogs)
 }
