@@ -209,3 +209,38 @@ func (r *transactionRepo) GetLedger(ctx context.Context, userID, contactID strin
 	ledger.Net = ledger.TotalReceived - ledger.TotalSent
 	return ledger, nil
 }
+
+func (r *transactionRepo) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions WHERE status = 'success'`).Scan(&count)
+	return count, err
+}
+
+func (r *transactionRepo) GetTotalVolume(ctx context.Context) (int64, error) {
+	var volume int64
+	err := r.db.QueryRow(ctx, `SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE status = 'success'`).Scan(&volume)
+	return volume, err
+}
+
+func (r *transactionRepo) ListAll(ctx context.Context, limit, offset int) ([]*domain.Transaction, int, error) {
+	query := `SELECT id, user_id, type, status, amount, fee, description, category, reference, card_id, merchant_id, recipient_id, recipient_name, balance_before, balance_after, is_nfc, created_at FROM transactions ORDER BY created_at DESC LIMIT $1 OFFSET $2`
+
+	rows, err := r.db.Query(ctx, query, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var txs []*domain.Transaction
+	for rows.Next() {
+		tx := &domain.Transaction{}
+		if err := rows.Scan(&tx.ID, &tx.UserID, &tx.Type, &tx.Status, &tx.Amount, &tx.Fee, &tx.Description, &tx.Category, &tx.Reference, &tx.CardID, &tx.MerchantID, &tx.RecipientID, &tx.RecipientName, &tx.BalanceBefore, &tx.BalanceAfter, &tx.IsNFC, &tx.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		txs = append(txs, tx)
+	}
+
+	var total int
+	r.db.QueryRow(ctx, `SELECT COUNT(*) FROM transactions`).Scan(&total)
+	return txs, total, nil
+}
