@@ -88,3 +88,43 @@ func (r *userRepo) Update(ctx context.Context, u *domain.User) error {
 	}
 	return nil
 }
+
+func (r *userRepo) Delete(ctx context.Context, id string) error {
+	_, err := r.db.Exec(ctx, `UPDATE users SET is_active = FALSE WHERE id = $1`, id)
+	return err
+}
+
+func (r *userRepo) Count(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE is_active = TRUE`).Scan(&count)
+	return count, err
+}
+
+func (r *userRepo) CountActiveToday(ctx context.Context) (int, error) {
+	var count int
+	err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE last_login >= CURRENT_DATE`).Scan(&count)
+	return count, err
+}
+
+func (r *userRepo) ListAll(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+	rows, err := r.db.Query(ctx, `
+		SELECT id, email, password_hash, name, phone, initials, is_verified, is_active, created_at, updated_at
+		FROM users ORDER BY created_at DESC LIMIT $1 OFFSET $2`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var users []*domain.User
+	for rows.Next() {
+		u := &domain.User{}
+		if err := rows.Scan(&u.ID, &u.Email, &u.PasswordHash, &u.Name, &u.Phone, &u.Initials, &u.IsVerified, &u.IsActive, &u.CreatedAt, &u.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		users = append(users, u)
+	}
+
+	var total int
+	r.db.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&total)
+	return users, total, nil
+}
