@@ -35,8 +35,8 @@ func Unauthorized(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusUnauthorized).JSON(envelope{Error: "unauthorized"})
 }
 
-func Forbidden(c *fiber.Ctx) error {
-	return c.Status(fiber.StatusForbidden).JSON(envelope{Error: "forbidden"})
+func Forbidden(c *fiber.Ctx, msg string) error {
+	return c.Status(fiber.StatusForbidden).JSON(envelope{Error: msg})
 }
 
 func NotFound(c *fiber.Ctx, msg string) error {
