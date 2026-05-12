@@ -1,16 +1,15 @@
-version: "3.9"
-
 services:
   db:
-    image: postgres:15-alpine
+    image: postgres:latest
     container_name: rwanda_pay_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rwandapay}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rwandapay_secret}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rwandapay_secure_2026}
       POSTGRES_DB: ${POSTGRES_DB:-rwandapay}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -18,23 +17,62 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - rwanda_pay_network
 
-  api:
+  backend:
     build:
-      context: .
-      dockerfile: artifacts/api-server/Dockerfile
-    container_name: rwanda_pay_api
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: rwanda_pay_backend
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     environment:
-      NODE_ENV: production
-      PORT: 8080
-      DATABASE_URL: postgresql://${POSTGRES_USER:-rwandapay}:${POSTGRES_PASSWORD:-rwandapay_secret}@db:5432/${POSTGRES_DB:-rwandapay}
-      SESSION_SECRET: ${SESSION_SECRET:-change_this_in_production_min_32_chars}
+      APP_ENV: production
+      APP_PORT: 8080
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-rwandapay}
+      DB_USER: ${POSTGRES_USER:-rwandapay}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-rwandapay_secure_2026}
+      DB_SSLMODE: disable
+      DB_MAX_CONNS: 25
+      DB_MIN_CONNS: 5
+      JWT_SECRET: ${JWT_SECRET:-rwanda_pay_jwt_secret_2026_min_32_characters}
+      JWT_EXPIRY_HOURS: 168
+      ENCRYPTION_KEY: 6368616e676520746869732070617373776f726420746f206120736563726574
     ports:
       - "8080:8080"
+    networks:
+      - rwanda_pay_network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: rwanda_pay_pgadmin
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@rwandapay.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+      PGADMIN_CONFIG_UPGRADE_CHECK_ENABLED: 'False'
+      PGADMIN_SERVER_JSON_FILE: /pgadmin4/servers.json
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./database/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    networks:
+      - rwanda_pay_network
 
 volumes:
   postgres_data:
+  pgadmin_data:
+
+networks:
+  rwanda_pay_network:
+    driver: bridge

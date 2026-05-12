@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Rwanda Pay DB",
+      "Group": "Servers",
+      "Host": "db",
+      "Port": 5432,
+      "MaintenanceDB": "rwandapay",
+      "Username": "rwandapay",
+      "SSLMode": "prefer",
+      "Comment": "Rwanda Pay database - Password: rwandapay_secure_2026"
+    }
+  }
+}
