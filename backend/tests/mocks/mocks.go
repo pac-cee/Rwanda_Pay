@@ -40,6 +40,29 @@ func (m *MockUserRepository) Update(ctx context.Context, user *domain.User) erro
 	return args.Error(0)
 }
 
+func (m *MockUserRepository) Delete(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockUserRepository) Count(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepository) CountActiveToday(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockUserRepository) ListAll(ctx context.Context, limit, offset int) ([]*domain.User, int, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*domain.User), args.Int(1), args.Error(2)
+}
+
 // ─── WalletRepository Mock (basic) ───────────────────────────────────────────
 
 type MockWalletRepository struct {
@@ -183,6 +206,32 @@ func (m *MockMerchantRepository) Search(ctx context.Context, query string, limit
 	return args.Get(0).([]*domain.Merchant), args.Error(1)
 }
 
+func (m *MockMerchantRepository) ListAll(ctx context.Context) ([]*domain.Merchant, error) {
+	args := m.Called(ctx)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Merchant), args.Error(1)
+}
+
+func (m *MockMerchantRepository) Create(ctx context.Context, name, email, phone, category, description, address, city string) (*domain.Merchant, error) {
+	args := m.Called(ctx, name, email, phone, category, description, address, city)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Merchant), args.Error(1)
+}
+
+func (m *MockMerchantRepository) Update(ctx context.Context, id, name, email, phone, description string) error {
+	args := m.Called(ctx, id, name, email, phone, description)
+	return args.Error(0)
+}
+
+func (m *MockMerchantRepository) Delete(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // ─── UserMerchantRepository Mock ──────────────────────────────────────────────
 
 type MockUserMerchantRepository struct {
@@ -253,4 +302,22 @@ func (m *MockTransactionRepository) GetLedger(ctx context.Context, userID, conta
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*repository.Ledger), args.Error(1)
+}
+
+func (m *MockTransactionRepository) Count(ctx context.Context) (int, error) {
+	args := m.Called(ctx)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockTransactionRepository) GetTotalVolume(ctx context.Context) (int64, error) {
+	args := m.Called(ctx)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockTransactionRepository) ListAll(ctx context.Context, limit, offset int) ([]*domain.Transaction, int, error) {
+	args := m.Called(ctx, limit, offset)
+	if args.Get(0) == nil {
+		return nil, 0, args.Error(2)
+	}
+	return args.Get(0).([]*domain.Transaction), args.Int(1), args.Error(2)
 }
