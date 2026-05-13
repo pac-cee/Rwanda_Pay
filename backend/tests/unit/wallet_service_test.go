@@ -20,7 +20,7 @@ func newWalletService(
 	userMerchantRepo *mocks.MockUserMerchantRepository,
 	txRepo *mocks.MockTransactionRepository,
 ) *service.WalletService {
-	return service.NewWalletService(walletRepo, cardRepo, userRepo, merchantRepo, userMerchantRepo, txRepo)
+	return service.NewWalletService(walletRepo, cardRepo, userRepo, merchantRepo, userMerchantRepo, txRepo, nil)
 }
 
 // ─── Topup ────────────────────────────────────────────────────────────────────
